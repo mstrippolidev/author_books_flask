@@ -3,6 +3,7 @@
 """
 from flask import Flask
 from flask_jwt_extended import JWTManager
+from authlib.integrations.flask_client import OAuth
 from flask_migrate import Migrate
 from config import DevelopmentConfig
 from extension import db
@@ -40,6 +41,17 @@ def create_app():
         jti = jwt_payload["jti"]
         token = TokenBlocklist.query.filter_by(jti = jti).first()
         return token is not None # True means that is not revoked yet
+    #  Save Oauth credentials
+    oauth = OAuth(app)
+    oauth.register(
+        name='google',
+        # client_id = app.config.get('GOOGLE_CLIENT_ID'),
+        # client_secret = app.config.get('GOOGLE_CLIENT_SECRET'),
+        access_token_url='https://accounts.google.com/o/oauth2/token',
+        authorize_url='https://accounts.google.com/o/oauth2/auth',
+        api_base_url='https://www.googleapis.com/oauth2/v1/',
+        userinfo_endpoint='https://openidconnect.googleapis.com/v1/userinfo',  # for latest Google OAuth
+    )
 
     # Add my blueprints
     from admin.routes.router_auth import auth_blueprint

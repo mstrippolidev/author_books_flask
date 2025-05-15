@@ -17,6 +17,8 @@ class Config:
     DEBUG = os.getenv('DEBUG')
     DB_PASSWORD = os.getenv("DB_PASSWORD")
     JWT_SECRET_KEY = os.getenv('SECRET_KEY')
+    GOOGLE_CLIENT_SECRET=os.getenv('GOOGLE_CLIENT_SECRET')
+    GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
     JWT_ACCESS_TOKEN_EXPIRES = expire
 
     @property
