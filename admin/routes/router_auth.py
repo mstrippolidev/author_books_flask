@@ -2,7 +2,7 @@
     File to put the enpoint handle the jwt authentication.
 """
 # admin/auth.py
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, url_for, current_app
 from sqlalchemy import or_, func
 from werkzeug.security import generate_password_hash, check_password_hash
 from extension import db
@@ -108,3 +108,52 @@ def authenticated():
     """
     user = current_user
     return jsonify(user.to_dict())
+
+@auth_blueprint.route('/login/google', methods = ['GET'])
+def google_login():
+    """
+        Endpoint to redirect user to google website to login
+    """
+    # Redirect user to Google for authorization.
+    google = current_app.oauth.google
+    redirect_uri = url_for('auth.google_auth', _external=True) # prefix of the blueprint 'auth'
+    print('url for google', redirect_uri)
+    return google.authorize_redirect(redirect_uri)
+
+
+@auth_blueprint.route('/authorize/google')
+def google_auth():
+    # Callback endpoint. This code exchanges the auth code for token and user info.
+    google = current_app.oauth.google
+    token = google.authorize_access_token()
+    user_info = token.get('userinfo')
+
+    # Example: Extract some user data
+    email = user_info.get("email")
+    name = user_info.get("name")
+    last_name = user_info.get('family_name')
+
+    # Now, check if this email already exists in your database
+    user = User.query.filter(func.lower(User.email) == str(email).lower(),).first()
+    if not user:
+        print("not user found")
+        user = User(
+            email=email,
+            username=email.split('@')[0], # Generate a username with the email
+            first_name=name,
+            last_name=last_name,
+            password=None  # You might leave password empty or set a random placeholder
+        )
+        db.session.add(user)
+        db.session.commit()
+
+    # After logging in via OAuth, issue JWT tokens for consistency
+    access_token = create_access_token(identity=user)
+    refresh_token = create_refresh_token(identity=user)
+
+    # You could return tokens, set secure cookies, or redirect to your frontend as needed.
+    return jsonify(
+        message="Logged in with Google",
+        access_token=access_token,
+        refresh_token=refresh_token
+    )

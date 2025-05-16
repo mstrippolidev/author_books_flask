@@ -45,13 +45,10 @@ def create_app():
     oauth = OAuth(app)
     oauth.register(
         name='google',
-        # client_id = app.config.get('GOOGLE_CLIENT_ID'),
-        # client_secret = app.config.get('GOOGLE_CLIENT_SECRET'),
-        access_token_url='https://accounts.google.com/o/oauth2/token',
-        authorize_url='https://accounts.google.com/o/oauth2/auth',
-        api_base_url='https://www.googleapis.com/oauth2/v1/',
-        userinfo_endpoint='https://openidconnect.googleapis.com/v1/userinfo',  # for latest Google OAuth
+        client_kwargs={'scope': 'openid email profile'}, # Required by google!!
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',  # <== This ensures JWKS can be fetched
     )
+    app.oauth = oauth
 
     # Add my blueprints
     from admin.routes.router_auth import auth_blueprint
