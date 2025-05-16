@@ -136,7 +136,6 @@ def google_auth():
     # Now, check if this email already exists in your database
     user = User.query.filter(func.lower(User.email) == str(email).lower(),).first()
     if not user:
-        print("not user found")
         user = User(
             email=email,
             username=email.split('@')[0], # Generate a username with the email

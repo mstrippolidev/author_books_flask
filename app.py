@@ -5,6 +5,8 @@ from flask import Flask
 from flask_jwt_extended import JWTManager
 from authlib.integrations.flask_client import OAuth
 from flask_migrate import Migrate
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from config import DevelopmentConfig
 from extension import db
 def create_app():
@@ -16,6 +18,12 @@ def create_app():
     app.config.from_object(config)
     db.init_app(app) # Initialize the db with app config
     jwt_manager = JWTManager(app)
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=["30 per minute"]
+    )
+
     # If you need to register the models
     from admin.models import User, TokenBlocklist
     from authors.models import AuthorBook, Author, Book
@@ -38,6 +46,9 @@ def create_app():
     
     @jwt_manager.token_in_blocklist_loader
     def check_if_token_is_revoked(jwt_header, jwt_payload: dict) -> bool:
+        """
+            Expand the jwt_required decorator to check if the token is in the block list
+        """
         jti = jwt_payload["jti"]
         token = TokenBlocklist.query.filter_by(jti = jti).first()
         return token is not None # True means that is not revoked yet
