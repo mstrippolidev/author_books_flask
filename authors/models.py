@@ -3,6 +3,7 @@
 """
 # models/authors.py
 from datetime import datetime, timezone
+from slugify import slugify
 from sqlalchemy.ext.associationproxy import association_proxy
 from extension import db
 
@@ -48,6 +49,20 @@ class Author(db.Model):
 
     def __repr__(self):
         return f'<Author {self.name}>'
+    
+    def to_dict(self, related=False):
+        """
+            Convert to dict the current object.
+        """
+        resp = {
+            'id': self.id,
+            'name': self.name,
+            'biography': self.biography,
+            'birthdate': self.birthdate
+        }
+        if related:
+            resp['books'] = [book.to_dict() for book in self.books]
+        return resp
 
 class Book(db.Model):
     __tablename__ = 'book'
@@ -56,6 +71,7 @@ class Book(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text)
+    slug_book = db.Column(db.String(200), unique = True, nullable = False)
     created_at = db.Column(db.DateTime, default=get_current_time)
     updated_at = db.Column(db.DateTime, default=get_current_time, onupdate=get_current_time)
 
@@ -67,3 +83,31 @@ class Book(db.Model):
 
     def __repr__(self):
         return f'<Book {self.title}> has this amount of authors {len(self.authors)}'
+    
+    def __init__(self, title, slug:str = None):
+        self.title = title
+        self.slug_book = self.generate_unique_slug(slug if slug else title)
+
+    def generate_unique_slug(self, title):
+        base_slug = slugify(title)
+        slug = base_slug
+        counter = 1
+        while Book.query.filter_by(slug_book=slug).first() is not None:
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        return slug
+    
+    def to_dict(self, add_related = False):
+        """
+            Convert a dict for this object.
+        """
+        resp = {
+            'id': self.id,
+            'title': self.title,
+            'slug_book': self.slug_book,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at
+        }
+        if add_related:
+            resp['authors'] = [author.to_dict() for author in self.authors]
+        return resp
