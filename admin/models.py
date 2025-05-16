@@ -22,7 +22,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(150), unique=True, nullable=False)
-    password = db.Column(db.String(300), nullable = False)
+    password = db.Column(db.String(300), nullable = True)
     role = db.Column(db.Enum(UserRoleEnum), nullable=False, default=UserRoleEnum.guest)
     first_name = db.Column(db.String(150), nullable=False)
     last_name = db.Column(db.String(150), nullable=False)
