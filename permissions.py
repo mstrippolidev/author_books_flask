@@ -11,7 +11,6 @@ def admin_required_post(f):
         """
             Function to handle authenticated user role admin and superadmin
         """
-        print('inside middlaware')
         user = current_user
         if request.method != 'POST':
             return f(*args, **kwargs)

@@ -73,4 +73,32 @@ def handle_authors():
             return paginated_model(Author, page, size, search, search_fields)
         except Exception as e:
             return jsonify(f"Error {str(e)}"), 422
+
+@author_blueprint.route('author/<int:author_id>', methods = ['PUT'])
+@jwt_required()
+@admin_required_post
+def handle_authors_elment(author_id:int):
+    """
+        Edit an author
+    """
+    author = Author.query.filter_by(id = author_id).first()
+    if author is None:
+        return jsonify(f"Author {author_id} does not exists!!"), 404
+    # Edit the fields in author
+    data = request.get_json() or {}
+    omit_fields =['id', 'created_at', 'updated_at']
+    for field in data:
+        if field in omit_fields:
+            continue
+        if hasattr(author, field):
+            setattr(author, field, data[field])
+    # Save author to the db
+    try:
+        db.session.commit()
+        return jsonify(author.to_dict()), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Error updating author", "error": str(e)}), 500
+
+
         
