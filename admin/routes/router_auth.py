@@ -33,6 +33,15 @@ def register():
     last_name = data.get('last_name')
     if email is None or username is None or password is None or first_name is None or last_name is None:
         return jsonify("Missing required parameter"), 400
+    user = User.query.filter(
+        or_(
+            func.lower(User.username) == str(username).lower(),
+            func.lower(User.email) == str(email).lower(),
+        )
+        ).first()
+    print(user)
+    if user is not None:
+        return jsonify("username/email already exists!!"), 400
     hashed_password = generate_password_hash(password)
     role = data.get('role')
     if role is None:
@@ -41,7 +50,7 @@ def register():
         return jsonify("Role not valid"), 422
     
     user = User(username=username, email=email, first_name=first_name,
-                last_name=last_name, password=hashed_password)
+                last_name=last_name, password=hashed_password, role=role)
     db.session.add(user)
     db.session.commit()
     return jsonify(message="User created successfully"), 201

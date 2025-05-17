@@ -63,7 +63,9 @@ def create_app():
 
     # Add my blueprints
     from admin.routes.router_auth import auth_blueprint
+    from authors.routes.router_author import author_blueprint
     app.register_blueprint(auth_blueprint)
+    app.register_blueprint(author_blueprint)
 
     # register the migrations
     migrate = Migrate(app, db)
