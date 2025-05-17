@@ -50,7 +50,8 @@ class User(db.Model):
             'first_name': self.first_name,
             'last_name': self.last_name,
             'username': self.username,
-            'email': self.email
+            'email': self.email,
+            'role': self.role.value
         }
     
 class TokenBlocklist(db.Model):
