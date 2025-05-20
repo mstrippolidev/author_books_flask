@@ -74,7 +74,7 @@ def handle_authors():
         except Exception as e:
             return jsonify(f"Error {str(e)}"), 422
 
-@author_blueprint.route('author/<int:author_id>', methods = ['PUT'])
+@author_blueprint.route('author/<int:author_id>', methods = ['GET','PUT', 'DELETE'])
 @jwt_required()
 @admin_required_post
 def handle_authors_elment(author_id:int):
@@ -84,21 +84,50 @@ def handle_authors_elment(author_id:int):
     author = Author.query.filter_by(id = author_id).first()
     if author is None:
         return jsonify(f"Author {author_id} does not exists!!"), 404
-    # Edit the fields in author
-    data = request.get_json() or {}
+    if request.method == 'GET':
+        return details_model(author, related = True)
+    if request.method == 'PUT':
+        # Edit the fields in author
+        data = request.get_json() or {}
+        return edit_model_details(author, data)
+    if request.method == 'DELETE':
+        return delete_model(author)
+
+def edit_model_details(model, data):
+    """
+        Funcion to edit a author
+    """
     omit_fields =['id', 'created_at', 'updated_at']
     for field in data:
         if field in omit_fields:
             continue
-        if hasattr(author, field):
-            setattr(author, field, data[field])
-    # Save author to the db
+        if hasattr(model, field):
+            setattr(model, field, data[field])
+    # Save model to the db
     try:
         db.session.commit()
-        return jsonify(author.to_dict()), 200
+        return jsonify(model.to_dict()), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({"message": "Error updating author", "error": str(e)}), 500
-
-
-        
+        return jsonify({"message": "Error updating", "error": str(e)}), 500
+    
+def delete_model(model):
+    """
+        General function to delete an element
+    """
+    try:
+        db.session.delete(model)
+        db.session.commit()
+        return jsonify({'msg': "Delete sucessfully!!"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Error Deleting", "error": str(e)}), 500
+    
+def details_model(model, *args, **kwargs):
+    """
+        General function to show a model with their related fields
+    """
+    try:
+       return jsonify(model.to_dict(*args, **kwargs)), 200
+    except Exception as e:
+        return jsonify({"message": "Something bad happens", "error": str(e)}), 500
