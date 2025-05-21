@@ -76,6 +76,17 @@ class Author(db.Model):
         if len(value) > 100:
             raise ValueError("name must be 100 characters")
         return value
+    
+    @validates('birthdate')
+    def validate_datetime(self, key,value):
+        """
+            Validate datetime objects
+        """
+        if value is not None:
+            try:
+                value = datetime.strptime(value, "%Y-%m-%d")
+            except Exception as e:
+                raise ValueError(str(e))
 
 class Book(db.Model):
     __tablename__ = 'book'
@@ -97,9 +108,14 @@ class Book(db.Model):
     def __repr__(self):
         return f'<Book {self.title}> has this amount of authors {len(self.authors)}'
     
-    def __init__(self, title, slug:str = None):
-        self.title = title
-        self.slug_book = self.generate_unique_slug(slug if slug else title)
+    def __init__(self, *args, **kwargs):
+        # Adding value to the model
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        title = kwargs.get('title')
+        slug = kwargs.get('slug_book')
+        if title is not None or slug is not None:
+            self.slug_book = self.generate_unique_slug(slug if slug else title)
 
     def generate_unique_slug(self, title):
         base_slug = slugify(title)
@@ -121,7 +137,7 @@ class Book(db.Model):
         return value
 
 
-    def to_dict(self, add_related = False):
+    def to_dict(self, related = False):
         """
             Convert a dict for this object.
         """
@@ -130,8 +146,9 @@ class Book(db.Model):
             'title': self.title,
             'slug_book': self.slug_book,
             'created_at': self.created_at,
-            'updated_at': self.updated_at
+            'updated_at': self.updated_at,
+            "description": self.description
         }
-        if add_related:
+        if related:
             resp['authors'] = [author.to_dict() for author in self.authors]
         return resp

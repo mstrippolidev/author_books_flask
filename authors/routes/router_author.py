@@ -49,14 +49,7 @@ def handle_authors():
         data = request.get_json()
         name = data.get("name")
         biography = data.get("biography")
-        birthdate = data.get('birthdate')
-        if name is None:
-            return jsonify("Name is required"), 422
-        if birthdate is not None:
-            try:
-                birthdate = datetime.strptime(birthdate, "%Y-%m-%d")
-            except Exception as e:
-                return jsonify("Not a valid date format is YYYY-MM-DD"), 422
+        birthdate = data.get('birthdate')        
         try:
             author = Author(name = name, biography = biography, birthdate = birthdate)
             db.session.add(author)
@@ -68,7 +61,7 @@ def handle_authors():
     else:
         try:
             page = request.args.get("page", default=1, type=int)
-            size = request.args.get("size", default=5, type=int)
+            size = request.args.get("size", default=15, type=int)
             search = request.args.get("search")
             search_fields = []
             if search is not None:
@@ -83,7 +76,7 @@ def handle_authors():
 @admin_required_post
 def handle_authors_elment(author_id:int):
     """
-        Edit an author
+        Edit, delete or details of an author
     """
     author = Author.query.filter_by(id = author_id).first()
     if author is None:
@@ -93,15 +86,15 @@ def handle_authors_elment(author_id:int):
     if request.method == 'PUT':
         # Edit the fields in author
         data = request.get_json() or {}
-        return edit_model_details(author, data)
+        return edit_model_details(author, data, ['author_books', 'books'])
     if request.method == 'DELETE':
         return delete_model(author)
 
-def edit_model_details(model, data):
+def edit_model_details(model, data, remove_fields = []):
     """
         Funcion to edit a author
     """
-    omit_fields =['id', 'created_at', 'updated_at']
+    omit_fields =['id', 'created_at', 'updated_at'] + remove_fields
     for field in data:
         if field in omit_fields:
             continue
@@ -137,17 +130,20 @@ def details_model(model, *args, **kwargs):
         return jsonify({"message": "Something bad happens", "error": str(e)}), 500
     
 
-def extract_data(model, data:dict) -> dict:
+def extract_data(model, data:dict, remove_fields = []) -> dict:
     """
         Create a dict model with the data from the request
     """
     resp = {}
+    omit = ['id'] + remove_fields
     for field in data:
+        if field in omit:
+            continue
         if hasattr(model, field):
             resp[field] = data[field]
     return resp
 
-@author_blueprint.route('author', methods = ['GET', 'POST'])
+@author_blueprint.route('book', methods = ['GET', 'POST'])
 @jwt_required()
 @admin_required_post
 def handle_books():
@@ -156,4 +152,44 @@ def handle_books():
     """
     if request.method == 'POST':
         data = request.get_json() or {}
-        data = extract_data(Book, data)
+        data = extract_data(Book, data, ['created_at', 'updated_at'])
+        try:
+            book = Book(**data)
+            db.session.add(book)
+            db.session.commit()
+            return jsonify(book.to_dict()), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify(f"Error {str(e)}"), 422
+
+    try:
+        page = request.args.get("page", default=1, type=int)
+        size = request.args.get("size", default=15, type=int)
+        search = request.args.get("search")
+        search_fields = []
+        if search is not None:
+            search = f"%{search}%"
+            search_fields = [Book.title.ilike(search), Book.description.ilike(search)]
+        return paginated_model(Book, page, size, search, search_fields)
+    except Exception as e:
+        return jsonify(f"Error {str(e)}"), 422
+    
+@author_blueprint.route('book/<int:book_id>', methods = ['GET','PUT', 'DELETE'])
+@jwt_required()
+@admin_required_post
+def handle_books_elment(book_id:int):
+    """
+        Edit, delete or details of a book
+    """
+    book = Book.query.filter_by(id = book_id).first()
+    if book is None:
+        return jsonify(f"book {book_id} does not exists!!"), 404
+    if request.method == 'PUT':
+        # Edit the fields in book
+        data = request.get_json() or {}
+        return edit_model_details(book, data, ['authors', 'author_books'])
+    if request.method == 'DELETE':
+        return delete_model(book)
+    # Get request
+    return details_model(book, related = True)
+    
