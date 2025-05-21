@@ -192,4 +192,22 @@ def handle_books_elment(book_id:int):
         return delete_model(book)
     # Get request
     return details_model(book, related = True)
-    
+
+@author_blueprint.route('book/<string:slug>', methods = ['GET','PUT', 'DELETE'])
+@jwt_required()
+@admin_required_post
+def handle_books_elment_slug(slug:str):
+    """
+        Edit, delete or details of a book
+    """
+    book = Book.query.filter_by(slug_book=slug).first()
+    if book is None:
+        return jsonify(f"book {slug} does not exists!!"), 404
+    if request.method == 'PUT':
+        # Edit the fields in book
+        data = request.get_json() or {}
+        return edit_model_details(book, data, ['authors', 'author_books'])
+    if request.method == 'DELETE':
+        return delete_model(book)
+    # Get request
+    return details_model(book, related = True)
