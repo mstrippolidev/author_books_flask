@@ -5,6 +5,7 @@
 from datetime import datetime, timezone
 from slugify import slugify
 from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy.orm import validates
 from extension import db
 
 def get_current_time():
@@ -63,6 +64,18 @@ class Author(db.Model):
         if related:
             resp['books'] = [book.to_dict() for book in self.books]
         return resp
+    @validates('name')
+    def validate_field(self, key, value):
+        """
+            Validate len and not null
+        """
+        if not value:
+            raise ValueError("The name cannot be empty")
+        if not isinstance(value, str):
+            raise ValueError("name must be string")
+        if len(value) > 100:
+            raise ValueError("name must be 100 characters")
+        return value
 
 class Book(db.Model):
     __tablename__ = 'book'
@@ -97,6 +110,17 @@ class Book(db.Model):
             counter += 1
         return slug
     
+    @validates('title')
+    def validate_title(self, key, value):
+        if not value:
+            raise ValueError("The title cannot be empty")
+        if not isinstance(value, str):
+            raise ValueError("Title must be string")
+        if len(value) > 150:
+            raise ValueError("Title must be 150 characters")
+        return value
+
+
     def to_dict(self, add_related = False):
         """
             Convert a dict for this object.

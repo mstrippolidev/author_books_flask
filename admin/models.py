@@ -3,6 +3,7 @@
 """
 import enum
 from datetime import datetime, timezone
+from sqlalchemy.orm import validates
 from extension import db
 
 def get_current_time():
@@ -53,6 +54,13 @@ class User(db.Model):
             'email': self.email,
             'role': self.role.value
         }
+    @validates('username', 'email')
+    def validate_not_empty(self, key, value):
+        # Check if the value is not None or an empty string (even after stripping whitespace)
+        if not value or not value.strip():
+            raise ValueError(f"{key.capitalize()} must not be empty!")
+        return value.strip()
+
     
 class TokenBlocklist(db.Model):
     """

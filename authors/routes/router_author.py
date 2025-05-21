@@ -11,7 +11,7 @@ from flask_jwt_extended import (
     current_user
 )
 from extension import db
-from authors.models import Author
+from authors.models import Author, Book
 from permissions import admin_required_post
 
 author_blueprint = Blueprint('authors', __name__, url_prefix='/author-books')
@@ -31,7 +31,7 @@ def paginated_model(model, page:int, size:int, search=None, search_fields = []):
     
     # Create the response structure.
     response = {
-        "data": [user.to_dict() for user in pagination.items],
+        "data": [val.to_dict() for val in pagination.items],
         "next_page": pagination.has_next,
         "prev_page": pagination.has_prev,
         "total_elements": pagination.total
@@ -57,10 +57,14 @@ def handle_authors():
                 birthdate = datetime.strptime(birthdate, "%Y-%m-%d")
             except Exception as e:
                 return jsonify("Not a valid date format is YYYY-MM-DD"), 422
-        author = Author(name = name, biography = biography, birthdate = birthdate)
-        db.session.add(author)
-        db.session.commit()
-        return jsonify(author.to_dict()), 201
+        try:
+            author = Author(name = name, biography = biography, birthdate = birthdate)
+            db.session.add(author)
+            db.session.commit()
+            return jsonify(author.to_dict()), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify(f"Error {str(e)}"), 422
     else:
         try:
             page = request.args.get("page", default=1, type=int)
@@ -131,3 +135,25 @@ def details_model(model, *args, **kwargs):
        return jsonify(model.to_dict(*args, **kwargs)), 200
     except Exception as e:
         return jsonify({"message": "Something bad happens", "error": str(e)}), 500
+    
+
+def extract_data(model, data:dict) -> dict:
+    """
+        Create a dict model with the data from the request
+    """
+    resp = {}
+    for field in data:
+        if hasattr(model, field):
+            resp[field] = data[field]
+    return resp
+
+@author_blueprint.route('author', methods = ['GET', 'POST'])
+@jwt_required()
+@admin_required_post
+def handle_books():
+    """
+        View to create books and shows a list of books
+    """
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        data = extract_data(Book, data)
