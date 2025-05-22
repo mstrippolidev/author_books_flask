@@ -27,7 +27,7 @@ def create_app():
     # If you need to register the models
     from admin.models import User, TokenBlocklist
     from authors.models import AuthorBook, Author, Book
-    
+    from authors.events import verify_foreign_keys
     @jwt_manager.user_identity_loader
     def user_identity_lookup(user: User):
         """
