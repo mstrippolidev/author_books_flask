@@ -9,7 +9,8 @@ from sqlalchemy.orm import validates
 from extension import db
 
 def get_current_time():
-    return datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=timezone.utc)
+    return now.replace(tzinfo=None)
 
 class AuthorBook(db.Model):
     __tablename__ = 'author_book'
@@ -29,7 +30,35 @@ class AuthorBook(db.Model):
 
     def __repr__(self):
         return f'<AuthorBook author_id={self.author_id}, book_id={self.book_id}>'
-
+    
+    @validates('author_id')
+    def validate_author_id(self, key,value):
+        """
+            Validate author id value
+        """
+        if not value:
+            raise ValueError("author_id cannot be empty")
+        return value
+        
+    @validates('book_id')
+    def validate_book(self, key,value):
+        """
+            Validate book value
+        """
+        if not value:
+            raise ValueError("book_id cannot be empty")
+        return value
+    
+    def to_dict(self):
+        """
+            Serialize response
+        """
+        return {
+            'id': self.id,
+            'author_id': self.author_id,
+            'book_id': self.book_id
+        }
+    
 class Author(db.Model):
     __tablename__ = 'author'
     __table_args__ = {'schema': 'authors'}
@@ -87,6 +116,7 @@ class Author(db.Model):
                 value = datetime.strptime(value, "%Y-%m-%d")
             except Exception as e:
                 raise ValueError(str(e))
+        return value
 
 class Book(db.Model):
     __tablename__ = 'book'

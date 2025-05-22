@@ -11,7 +11,7 @@ from flask_jwt_extended import (
     current_user
 )
 from extension import db
-from authors.models import Author, Book
+from authors.models import Author, Book, AuthorBook
 from permissions import admin_required_post
 
 author_blueprint = Blueprint('authors', __name__, url_prefix='/author-books')
@@ -211,3 +211,41 @@ def handle_books_elment_slug(slug:str):
         return delete_model(book)
     # Get request
     return details_model(book, related = True)
+
+
+@author_blueprint.route('/', methods = ['POST'])
+@jwt_required()
+@admin_required_post
+def create_relation_author_book():
+    """
+        Api endpoint to create a relation between an author an a book.
+    """
+    data = request.get_json() or {}
+    print(data)
+    author_id = data.get('author_id')
+    book_id = data.get('book_id')
+    try:
+        author_book = AuthorBook(author_id = author_id, book_id = book_id) 
+        db.session.add(author_book)
+        db.session.commit()
+        return jsonify(author_book.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(f"Error {str(e)}"), 422
+
+@author_blueprint.route('/<int:author_book_id>', methods = ['PUT', 'DELETE'])
+@jwt_required()
+@admin_required_post
+def edit_delete_relation_author_book(author_book_id):
+    """
+        Api endpoint to edit a relation between an author an a book.
+    """
+    author_book = AuthorBook.query.get(author_book_id)
+    if author_book is None:
+        return jsonify(f"author_book {author_book_id} does not exists!!"), 404
+    if request.method == 'PUT':
+        # Edit the fields in author_book
+        data = request.get_json() or {}
+        return edit_model_details(author_book, data)
+    if request.method == 'DELETE':
+        return delete_model(author_book)
