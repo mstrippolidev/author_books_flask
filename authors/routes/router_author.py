@@ -221,7 +221,6 @@ def create_relation_author_book():
         Api endpoint to create a relation between an author an a book.
     """
     data = request.get_json() or {}
-    print(data)
     author_id = data.get('author_id')
     book_id = data.get('book_id')
     try:

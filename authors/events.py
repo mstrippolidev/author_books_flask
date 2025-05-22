@@ -6,7 +6,6 @@ from extension import db
 from authors.models import AuthorBook, Author, Book
 
 def verify_foreign_keys(mapper, connection, target):
-    print('inside event handler', mapper, target, target.author_id, target.book_id)
     # Use the actual connection (not the session) to check if there is a author
     author_exists = connection.execute(
         # Select only one column

@@ -126,7 +126,6 @@ def google_login():
     # Redirect user to Google for authorization.
     google = current_app.oauth.google
     redirect_uri = url_for('auth.google_auth', _external=True) # prefix of the blueprint 'auth'
-    print('url for google', redirect_uri)
     return google.authorize_redirect(redirect_uri)
 
 
