@@ -2,7 +2,7 @@ import os
 from datetime import timedelta
 from dotenv import load_dotenv
 expire = timedelta(hours=2)
-load_dotenv()
+load_dotenv(override=True)
 
 class Config:
     """

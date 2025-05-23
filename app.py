@@ -11,6 +11,7 @@ def create_app():
     """
     app = Flask(__name__)
     config = DevelopmentConfig() # Because the property is not being execute unless is instance
+    print(config.SQLALCHEMY_DATABASE_URI)
     app.config.from_object(config)
     init_extensions(app)
     # Register models to myapp
