@@ -21,6 +21,9 @@ def create_app():
 
     # register the migrations
     migrate = Migrate(app, db)
+    @app.route('/', methods = ['GET'])
+    def index():
+        return "Hello world"
     return app
 
 def init_extensions(app):
