@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  web:
+    build:
+      context: .. # To specify that the main folder is a directory below
+      dockerfile: docker_files/Dockerfile
+    command: gunicorn --bind 0.0.0.0:8000 "app:create_app()" # Will be execute in the entrypoint, 
+    # Add the workers depending of your server cpu cores
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    depends_on:
+      - db
+
+  db:
+    image: postgres:13-alpine
+    restart: always
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_DB: ${DB_NAME} # This is the name in postgres image, will create automatically this db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

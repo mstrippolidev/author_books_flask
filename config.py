@@ -26,7 +26,7 @@ class Config:
         return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
 class DevelopmentConfig(Config):
-    DB_HOST = 'localhost'
+    DB_HOST = os.getenv('DB_HOST')
 
 # class TestingConfig(Config):
 #     DB_SERVER = 'localhost'
