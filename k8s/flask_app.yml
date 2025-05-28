@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+	name: flask-app-deployment
+  labels:
+    component: flask-app
+spec:
+  replicas: 3
+  selector: # tell what is the select for this deployment for the pods (key: value)
+    matchLabels:
+      component: flask-app
+  template: # configure what template for your containers
+    metadata:
+      labels:
+        component: flask-app
+    specs:
+      containers:
+        - name: flask-app
+          image: joseriosve/flask_app_distributed
+          ports:
+            - containerPort: 8000
