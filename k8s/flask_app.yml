@@ -19,3 +19,9 @@ spec:
           image: joseriosve/flask_app_distributed
           ports:
             - containerPort: 8000
+          # It starts gunicorn, binding it to port 8000.
+          #command: ["gunicorn", "--workers", "3", "--bind", "0.0.0.0:8000", "app:create_app()"]
+          # Optionally, you can add environment variables, resource limits, and probes.
+          # env:
+          #   - name: FLASK_ENV
+          #     value: production
