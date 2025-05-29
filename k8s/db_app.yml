@@ -32,4 +32,4 @@ spec:
       volumes:
         - name: postgres-volumes
           PersistentVolumeClaim:
-            claimName: postgres-pvc
+            claimName: postgres-pvc # Name of my pvcClaim file
