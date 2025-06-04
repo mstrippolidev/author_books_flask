@@ -21,11 +21,20 @@ spec:
           - containerPort: 5432
           env: # Changes this for secrets later
             - name: POSTGRES_PASSWORD
-              value: "your_password_here"
+              valueFrom:
+                secretKeyRef:
+                  name: secrets-flask-app
+                  key: DB_PASSWORD
             - name: POSTGRES_USER
-              value: "postgres"
+              valueFrom:
+                secretKeyRef:
+                  name: secrets-flask-app
+                  key: DB_USER
             - name: POSTGRES_DB
-              value: "mydatabase"
+              valueFrom:
+                secretKeyRef:
+                  name: secrets-flask-app
+                  key: DB_NAME
           volumeMounts: # Mount the data in this filesystem (like binding to the PVC)
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
