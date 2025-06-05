@@ -5,7 +5,7 @@ metadata:
   labels:
     component: flask-app
 spec:
-  replicas: 3
+  replicas: 2
   selector: # tell what is the select for this deployment for the pods (key: value)
     matchLabels:
       component: flask-app
