@@ -42,3 +42,5 @@ spec:
         - name: postgres-volumes
           PersistentVolumeClaim:
             claimName: postgres-pvc # Name of my pvcClaim file
+      nodeSelector: # To be selected by my eks role tag
+        role: db
