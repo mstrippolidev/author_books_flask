@@ -39,8 +39,8 @@ spec:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
       volumes:
-        - name: postgres-volumes
-          PersistentVolumeClaim:
+        - name: postgres-data # The same as in voluma name above
+          persistentVolumeClaim:
             claimName: postgres-pvc # Name of my pvcClaim file
       nodeSelector: # To be selected by my eks role tag
         role: db
