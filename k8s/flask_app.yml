@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-	name: flask-app-deployment
+  name: flask-app-deployment
   labels:
     component: flask-app
 spec:
@@ -14,20 +14,20 @@ spec:
       labels:
         component: flask-app
     spec:
-      containers:
-        - name: flask-app
-          image: joseriosve/flask_app_distributed
-          ports:
-            - containerPort: 8000
-          envFrom:
-            - secretRef: # import all your secret to this app
-                name: secrets-flask-app
-          command:
-            - "gunicorn"
-            - "--workers"
-            - "3"
-            - "--bind"
-            - "0.0.0.0:8000"
-            - "app:create_app()"
-      nodeSelector:
+      nodeSelector: # to schedule pods on nodes with this label
         role: app
+      containers:
+      - name: flask-app
+        image: joseriosve/flask_app_distributed
+        ports:
+        - containerPort: 8000
+        envFrom: # import all your secret to this app
+        - secretRef:
+            name: secrets-flask-app
+        command: # this command will run Gunicorn with 3 workers, binding on port 8000, and execute the "create_app()" callable from your "app" module
+        - "gunicorn"
+        - "--workers"
+        - "3"
+        - "--bind"
+        - "0.0.0.0:8000"
+        - "app:create_app()"
