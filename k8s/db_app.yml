@@ -38,6 +38,7 @@ spec:
           volumeMounts: # Mount the data in this filesystem (like binding to the PVC)
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+              subPath:  postgres
       volumes:
         - name: postgres-data # The same as in voluma name above
           persistentVolumeClaim:
