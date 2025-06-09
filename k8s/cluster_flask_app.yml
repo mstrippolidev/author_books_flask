@@ -1,11 +1,11 @@
 apiVersion: v1
-Kind: Service
+kind: Service
 metadata:
-	name: flask-app-cluster-ip-service
+  name: flask-app-cluster-ip-service
 spec:
   type: ClusterIP
   selector:
     component: flask-app
   ports:
-    - port: 80 # Expose port
+    - port: 80        # Expose port
       targetPort: 8000
