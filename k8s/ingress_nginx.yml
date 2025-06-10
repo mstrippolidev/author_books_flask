@@ -6,7 +6,7 @@ metadata:
 spec:
   ingressClassName: nginx # required by new versions of k8s
   rules:
-    - host: a44090bce547b4f12b46907fa6464cc1-1744562305.us-east-1.elb.amazonaws.com  # external ip load balancer
+    - host: acbab133108a64ba88d37faf6ba9a301-712758520.us-east-1.elb.amazonaws.com  # external ip load balancer
       http:
         paths:
           - path: /
