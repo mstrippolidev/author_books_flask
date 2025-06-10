@@ -5,7 +5,7 @@ metadata:
   labels:
     component: postgres
 spec:
-  replicas: 1
+  replicas: 1 # Only one DB instance in this setup
   selector:
     matchLabels:
       component: postgres
@@ -18,8 +18,8 @@ spec:
         - name: postgres
           image: postgres:14-alpine
           ports:
-          - containerPort: 5432
-          env: # Changes this for secrets later
+            - containerPort: 5432 # PostgreSQL default port
+          env: # Using Kubernetes secrets for secure credentials
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -35,13 +35,18 @@ spec:
                 secretKeyRef:
                   name: secrets-flask-app
                   key: DB_NAME
-          volumeMounts: # Mount the data in this filesystem (like binding to the PVC)
+          volumeMounts: # Persist database storage
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
-              subPath:  postgres
+              subPath: postgres
+          readinessProbe: # Ensures the DB is ready before migrations run
+            exec:
+              command: ["pg_isready", "-h", "postgres-cluster-services", "-p", "5432"]
+            initialDelaySeconds: 5 # Delay before first probe
+            periodSeconds: 10 # Check DB readiness every 10 seconds
       volumes:
-        - name: postgres-data # The same as in voluma name above
+        - name: postgres-data
           persistentVolumeClaim:
-            claimName: postgres-pvc # Name of my pvcClaim file
-      nodeSelector: # To be selected by my eks role tag
-        role: db
+            claimName: postgres-pvc # PVC for DB persistence
+      nodeSelector:
+        role: db # Ensures DB runs on specific nodes

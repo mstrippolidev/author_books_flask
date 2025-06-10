@@ -100,4 +100,10 @@ def register_models():
 
 if __name__ == '__main__':
     app = create_app()
+    # Health api
+    @app.route('/health',methods = ['GET'])
+    def hello():
+        print('check')
+        return "Hello world"
     app.run(debug=app.config.get("DEBUG", False))
+    

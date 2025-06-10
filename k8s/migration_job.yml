@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: flask-db-migration
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      containers:
+        - name: migration-container
+          image: joseriosve/flask_app_distributed:v2
+          command: ["sh", "-c", "
+            echo 'Waiting for database and Flask app...';
+            until nc -z postgres-cluster-services 5432; do sleep 5; done; # Ensures PostgreSQL is ready
+            until nc -z flask-app-cluster-ip-service 80; do sleep 5; done; # Ensures Flask app is running
+            echo 'Running database migrations...';
+            flask db upgrade"]
+          envFrom: # Load ALL secrets for environment variables
+            - secretRef:
+                name: secrets-flask-app
+      restartPolicy: OnFailure # Ensures the job runs only once
