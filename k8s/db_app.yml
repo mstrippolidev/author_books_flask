@@ -39,11 +39,6 @@ spec:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
               subPath: postgres
-          readinessProbe: # Ensures the DB is ready before migrations run
-            exec:
-              command: ["pg_isready", "-h", "locahost", "-p", "5432"]
-            initialDelaySeconds: 5 # Delay before first probe
-            periodSeconds: 10 # Check DB readiness every 10 seconds
       volumes:
         - name: postgres-data
           persistentVolumeClaim:
