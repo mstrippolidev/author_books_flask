@@ -31,9 +31,3 @@ spec:
             - "--bind"
             - "0.0.0.0:8000"
             - "app:create_app()"
-          readinessProbe: # Ensures Flask is ready before traffic is sent
-            httpGet:
-              path: /health # Flask app should define a health check endpoint
-              port: 8000 # The same port where the app runs
-            initialDelaySeconds: 5 # Wait 5 seconds before first check
-            periodSeconds: 10 # Check readiness every 10 seconds
