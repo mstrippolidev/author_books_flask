@@ -1,5 +1,4 @@
-# .github/workflows/hello-world.yml
-name: Hello World
+name: Docker push job
 on:
   push:
     branches:
