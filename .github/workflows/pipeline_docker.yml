@@ -6,6 +6,7 @@ on:
 jobs:
   run-test:
     runs-on: ubuntu-latest
+    environment: MAIN
     steps:
       - name: run test
         run: echo "running test (checkout and run test to db test)"
@@ -15,6 +16,7 @@ jobs:
   
   build-push-docker-image:
     runs-on: ubuntu-latest
+    environment: MAIN
     needs: [run-test]
     steps:
       - name: checkout code
