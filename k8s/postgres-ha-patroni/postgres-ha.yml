@@ -1,0 +1,210 @@
+# This file contains all the necessary Kubernetes resources to deploy a 
+# high-availability PostgreSQL cluster using Patroni and Spilo.
+# It includes the Namespace, ConfigMap, RBAC (ServiceAccount, Role, RoleBinding),
+# Services (for primary, replicas, and headless discovery), and the StatefulSet.
+#
+# Key Corrections:
+# 1. StatefulSet: Updated to use the correct Spilo image ('ghcr.io/zalando/spilo-15:3.0-p1') 
+#    which bundles PostgreSQL and Patroni.
+# 2. Services: The label selectors in the 'patroni-postgres' and 'patroni-postgres-replicas' 
+#    services have been corrected to match the labels applied to the pods by Patroni ('cluster: postgres').
+# 3. All manifests are combined into a single file for easy application.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: postgres-patroni
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: patroni-config
+  namespace: postgres-patroni
+data:
+  patroni.yml: |
+    scope: postgres
+    namespace: /db/
+    name: "{POD_NAME}"              # auto-filled at runtime
+    kubernetes:
+      use_endpoints: true
+      labels:
+        cluster: postgres
+    log:
+      level: INFO
+    postgresql:
+      listen: 0.0.0.0:5432
+      connect_address: "{POD_IP}:5432" # runtime env var
+      data_dir: /pgdata/data
+      authentication:
+        replication:
+          username: replicator
+          password: "{{ PATRONI_REPLICATION_PASSWORD }}"
+        superuser:
+          username: postgres
+          password: "{{ POSTGRES_PASSWORD }}"
+      parameters:
+        max_connections: 100
+        shared_buffers: 256MB
+    tags: # Allow this node to start again, replicate and be promoted respectively
+      no_failover: false
+      no_replication: false
+      no_master: false
+
+---
+# This role is need to tell patroni to use the Kubernetes api to use as Distributed Configuration Store (DCS)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: patroni
+  namespace: postgres-patroni
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: postgres-patroni
+  name: patroni-role
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints", "pods", "services", "configmaps"]
+    verbs: ["get", "watch", "list", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: patroni-rolebinding
+  namespace: postgres-patroni
+subjects:
+  - kind: ServiceAccount
+    name: patroni
+roleRef:
+  kind: Role
+  name: patroni-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: patroni-postgres-master # Service for the primary (read/write)
+  namespace: postgres-patroni
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    # This selector now correctly targets the label that Patroni will manage
+    cluster: postgres 
+    role: master # Patroni sets this label on the primary pod
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: patroni-postgres-replicas # Service for read-only replicas
+  namespace: postgres-patroni
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    # This selector now correctly targets the label that Patroni will manage
+    cluster: postgres
+    role: replica # Patroni sets this label on replica pods
+
+---
+# Headless service for pod-to-pod discovery within the StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: postgres-patroni
+spec:
+  clusterIP: None
+  selector:
+    # This selector should match the labels in the StatefulSet pod template
+    app: postgres 
+  ports:
+    - name: pg
+      port: 5432
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: postgres-patroni
+spec:
+  serviceName: postgres-headless
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        cluster: postgres
+    spec:
+      # This secret is used to pull the private Spilo image from ghcr.io
+      # You MUST create this secret before applying the StatefulSet.
+      imagePullSecrets:
+        - name: ghcr-creds
+      serviceAccountName: patroni
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: postgres
+          # --- IMAGE CORRECTION ---
+          # This is the correct Spilo image which contains both PostgreSQL and Patroni.
+          # I've chosen Postgres 15 here as a stable, modern choice.
+          image: ghcr.io/zalando/spilo-15:3.0-p1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+            - name: PATRONI_KUBERNETES_LABELS
+              value: '{"app":"postgres"}'
+            - name: PATRONI_SCOPE
+              value: postgres
+            - name: PATRONI_POSTGRESQL_DATA_DIR
+              value: /pgdata/data
+            - name: POSTGRES_PASSWORD
+              value: Ey6EgBS0il # Consider using Kubernetes secrets for this
+            - name: PATRONI_REPLICATION_PASSWORD
+              value: Ey6EgBS0il # Consider using Kubernetes secrets for this
+            - name: PATRONI_CONFIG_FILE
+              value: /etc/patroni/patroni.yml
+          volumeMounts:
+            # Mount the persistent volume at /pgdata
+            - name: pgdata
+              mountPath: /pgdata
+            # Mount the patroni.yml config file into the container (optional, can be env vars too)
+            - name: patroni-config
+              mountPath: /etc/patroni
+          ports:
+            - containerPort: 5432
+              name: pg
+      volumes:
+        - name: patroni-config
+          configMap:
+            name: patroni-config
+            items:
+              - key: patroni.yml
+                path: patroni.yml
+  # This template defines the Persistent Volume Claim for each pod.
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        storageClassName: gp2 # Make sure this StorageClass exists in your cluster
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

@@ -1,0 +1,15 @@
+# Convert the cluster IP as headless (have the same IP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: postgres-patroni
+  labels:
+    app: postgres
+spec:
+  clusterIP: None  # <-- headless
+  selector:
+    app: postgres
+  ports:
+    - name: pg
+      port: 5432

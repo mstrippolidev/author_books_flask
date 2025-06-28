@@ -1,0 +1,47 @@
+# 09-job-create-db.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-my-db
+  namespace: postgres-patroni
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create-db
+          image: postgres:15
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: secrets-flask-app
+                  key: DB_PASSWORD
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: secrets-flask-app
+                  key: DB_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: secrets-flask-app
+                  key: DB_NAME
+          command: ["sh", "-c"]
+          args:
+            - |
+              # 1) Wait for the primary to be ready
+              until pg_isready -h patroni-postgres-master -U postgres; do
+                echo "Waiting for primary…"; sleep 2;
+              done
+
+              # 2) Create flask_db_1 if it doesn't exist
+              if ! psql -h patroni-postgres-master -U postgres -tc \
+                   "SELECT 1 FROM pg_database WHERE datname='flask_db_1'" \
+                   | grep -q 1; then
+                echo "Creating database flask_db_1"
+                psql -h patroni-postgres-master -U postgres -c "CREATE DATABASE flask_db_1;"
+              else
+                echo "Database flask_db_1 already exists"
+              fi

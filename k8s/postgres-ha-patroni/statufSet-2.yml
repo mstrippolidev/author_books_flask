@@ -1,0 +1,92 @@
+# postgres-patroni-statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: patroni-postgres
+  namespace: postgres-ha
+spec:
+  serviceName: "patroni-postgres"
+  replicas: 3 # This creates 3 pods (1 primary, 2 replicas)
+  selector:
+    matchLabels:
+      app: patroni-postgres
+  template:
+    metadata:
+      labels:
+        app: patroni-postgres
+    spec:
+      serviceAccountName: patroni-sa # Create this service account
+      containers:
+        - name: postgres
+          image: registry.opensource.zalan.do/acid/spilo-16:2.1-p4 # Example: Zalando's Spilo image
+          ports:
+            - containerPort: 5432
+              name: postgres
+            - containerPort: 8008 # Patroni REST API port
+              name: patroni-api
+          env:
+            - name: KUBERNETES_SCOPE
+              value: "patroni-postgres" # Name of your Patroni cluster
+            - name: KUBERNETES_LABELS
+              value: "application:patroni-postgres"
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: KUBERNETES_USE_ENDPOINTS # Use Kubernetes Endpoints for DCS
+              value: "true"
+            - name: PG_RESTAPI_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: PG_LISTEN
+              value: "0.0.0.0:5432"
+            - name: PG_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: PG_PORT
+              value: "5432"
+            - name: PG_RESTAPI_PORT
+              value: "8008"
+            - name: CLUSTER_NAME
+              value: "patroni-postgres"
+            - name: PGHOME
+              value: "/home/postgres/pgdata/pgroot" # Adjust if your image uses a different path
+            - name: PATRONI_TTL
+              value: "30"
+            - name: PATRONI_LOOP_WAIT
+              value: "10"
+            - name: PATRONI_RETRY_TIMEOUT
+              value: "10"
+            - name: PATRONI_REPLICATION_MODE
+              value: "asynchronous" # or "synchronous" for higher durability, but lower write performance
+            # If synchronous replication:
+            # - name: PATRONI_SYNCHRONOUS_MODE
+            #   value: "true"
+            # - name: PATRONI_SYNCHRONOUS_NODE_COUNT
+            #   value: "1" # Number of synchronous replicas required for commit
+            # You might want to adjust resource requests/limits based on your needs
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+          volumeMounts:
+            - name: pgdata
+              mountPath: /home/postgres/pgdata # Adjust based on your image
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim:
+            claimName: pgdata-patroni-postgres-$(pod.metadata.name) # Dynamic provisioning
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: standard # Your storage class name
+        resources:
+          requests:
+            storage: 10Gi # Adjust storage size

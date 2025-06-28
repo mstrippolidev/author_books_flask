@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: postgres-patroni
+spec:
+  serviceName: postgres-headless
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      imagePullSecrets:
+        - name: ghcr-creds # You need to create this secrets before 
+      serviceAccountName: patroni
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: postgres
+          image: ghcr.io/zalando/patroni:3.3.2-p3
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+            - name: PATRONI_KUBERNETES_LABELS
+              value: '{"app":"postgres"}'
+            - name: PATRONI_SCOPE
+              value: postgres
+            - name: PATRONI_POSTGRESQL_DATA_DIR
+              value: /pgdata/data
+            - name: POSTGRES_PASSWORD
+              value: Ey6EgBS0il
+            - name: PATRONI_REPLICATION_PASSWORD
+              value: Ey6EgBS0il
+          volumeMounts:
+            - name: pgdata
+              mountPath: /pgdata
+          ports:
+            - containerPort: 5432
+              name: pg
+      volumes:
+        - name: patroni-config
+          configMap:
+            name: patroni-config
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        storageClassName: gp2 # For using amazon EBS CSI driver!
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

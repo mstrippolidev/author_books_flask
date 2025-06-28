@@ -39,7 +39,7 @@ spec:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
               subPath: postgres
-      volumes:
+      volumes: # List of availables volume for this development
         - name: postgres-data
           persistentVolumeClaim:
             claimName: postgres-pvc # PVC for DB persistence

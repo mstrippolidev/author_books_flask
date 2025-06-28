@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: patroni-config
+  namespace: postgres-patroni
+data: # We will insert this plain text to the container (pod)
+  patroni.yml: |
+    scope: postgres
+    namespace: /db/
+    name: "{POD_NAME}"                 # auto-filled at runtime
+    kubernetes:
+      use_endpoints: true
+      labels:
+        cluster: postgres
+    log:
+      level: INFO
+    postgresql:
+      listen: 0.0.0.0:5432
+      connect_address: "{POD_IP}:5432" # runtime env var
+      data_dir: /pgdata/data # /var/lib/postgresql/data if i use this path in the mount in postgres
+      authentication:
+        replication:
+          username: replicator
+          password: "{{ PATRONI_REPLICATION_PASSWORD }}"
+        superuser:
+          username: postgres
+          password: "{{ POSTGRES_PASSWORD }}"
+      parameters:
+        max_connections: 100
+        shared_buffers: 256MB
+    tags: # Allow this node to start again, replicate and be prometed respectively
+      no_failover: false
+      no_replication: false
+      no_master: false

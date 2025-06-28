@@ -1,0 +1,30 @@
+# patroni-services.yaml You need one cluster ip for master node, and one for the replicas
+apiVersion: v1
+kind: Service
+metadata:
+  name: patroni-postgres # Service for the primary (read/write)
+  namespace: postgres-patroni
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    application: patroni-postgres # Label in stateful set
+    role: master # Patroni sets this label on the primary pod
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: patroni-postgres-replicas # Service for read-only replicas
+  namespace: postgres-patroni
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres # Statulset name
+  selector:
+    application: patroni-postgres
+    role: replica # Patroni sets this label on replica pods
