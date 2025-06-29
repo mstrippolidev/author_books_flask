@@ -29,6 +29,7 @@ data:
     name: "{POD_NAME}"              # auto-filled at runtime
     kubernetes:
       use_endpoints: true
+      namespace: postgres-patroni
       labels:
         cluster: postgres
     log:
@@ -69,6 +70,9 @@ rules:
   - apiGroups: [""]
     resources: ["endpoints", "pods", "services", "configmaps"]
     verbs: ["get", "watch", "list", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]  # Explicit permission for label updates
+    verbs: ["patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -170,7 +174,7 @@ spec:
             - name: POD_IP
               valueFrom: { fieldRef: { fieldPath: status.podIP } }
             - name: PATRONI_KUBERNETES_LABELS
-              value: '{"app":"postgres"}'
+              value: '{"app":"postgres", "cluster":"postgres"}'
             - name: PATRONI_SCOPE
               value: postgres
             - name: PATRONI_POSTGRESQL_DATA_DIR
@@ -179,8 +183,10 @@ spec:
               value: Ey6EgBS0il # Consider using Kubernetes secrets for this
             - name: PATRONI_REPLICATION_PASSWORD
               value: Ey6EgBS0il # Consider using Kubernetes secrets for this
-            - name: PATRONI_CONFIG_FILE
+            - name: PATRONI_CONFIG # change this name
               value: /etc/patroni/patroni.yml
+            - name: DCS_ENABLE_KUBERNETES_API
+              value: 'true'
           volumeMounts:
             # Mount the persistent volume at /pgdata
             - name: pgdata
@@ -191,6 +197,8 @@ spec:
           ports:
             - containerPort: 5432
               name: pg
+            - containerPort: 8008  # Add this
+              name: patroni-api
       volumes:
         - name: patroni-config
           configMap:
