@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: patronidemo
+  namespace: postgres-patroni
+  labels:
+    application: patroni
+    cluster-name: cluster-db-ha
+spec:
+  replicas: 3
+  serviceName: cluster-db-ha
+  selector:
+    matchLabels:
+      application: patroni
+      cluster-name: cluster-db-ha
+  template:
+    metadata:
+      labels:
+        application: patroni
+        cluster-name: cluster-db-ha
+    spec:
+      serviceAccountName: patronidemo
+      imagePullSecrets:
+        - name: ghcr-creds
+      containers:
+      - name: cluster-db-ha
+        image: ghcr.io/zalando/spilo-15:3.0-p1
+        imagePullPolicy: IfNotPresent
+        readinessProbe:
+          httpGet:
+            scheme: HTTP
+            path: /readiness
+            port: 8008
+          initialDelaySeconds: 3
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        ports:
+        - containerPort: 8008
+          protocol: TCP
+        - containerPort: 5432
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /home/postgres/pgdata
+          name: pgdata
+        - name: patroni-config
+          mountPath: /home/postgres
+        ports:
+            - containerPort: 5432
+              name: pg
+            - containerPort: 8008  # Add this
+              name: patroni-api
+        env:
+        - name: PATRONI_KUBERNETES_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: PATRONI_KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: PATRONI_KUBERNETES_BYPASS_API_SERVICE
+          value: 'true'
+        - name: PATRONI_KUBERNETES_USE_ENDPOINTS
+          value: 'true'
+        - name: PATRONI_KUBERNETES_LABELS
+          value: '{application: patroni, cluster-name: patronidemo}'
+        - name: PATRONI_SUPERUSER_USERNAME
+          value: postgres
+        - name: PATRONI_SUPERUSER_PASSWORD
+          value: Ey6EgBS0il
+        - name: PATRONI_REPLICATION_USERNAME
+          value: standby
+        - name: PATRONI_REPLICATION_PASSWORD
+          value: Ey6EgBS0il
+        - name: PATRONI_SCOPE
+          value: cluster-db-ha
+        - name: DCS_ENABLE_KUBERNETES_API
+          value: 'true'
+        - name: PATRONI_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: PATRONI_POSTGRESQL_DATA_DIR
+          value: /home/postgres/pgdata/pgroot/data
+        - name: PATRONI_POSTGRESQL_PGPASS
+          value: /tmp/pgpass
+        - name: PATRONI_POSTGRESQL_LISTEN
+          value: '0.0.0.0:5432'
+        - name: PATRONI_RESTAPI_LISTEN
+          value: '0.0.0.0:8008'
+      terminationGracePeriodSeconds: 0
+      volumes:
+      - name: pgdata
+        emptyDir: {}
+      - name: patroni-config
+        configMap:
+          name: patroni-config
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        storageClassName: gp2 # Make sure this StorageClass exists in your cluster
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

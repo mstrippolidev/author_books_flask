@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: patroni-config
+  namespace: postgres-patroni
+data: # We will insert this plain text to the container (pod)
+  patroni.yml: |
+    scope: postgres
+    namespace: /db/
+    name: "{POD_NAME}" # auto-filled at runtime
+    bootstrap:
+      dcs:
+        postgresql:
+          use_pg_rewind: true
+          pg_hba:
+          - host all all 0.0.0.0/0 md5
+          - host replication ${PATRONI_REPLICATION_USERNAME} ${PATRONI_KUBERNETES_POD_IP}/16 md5
+          - host replication ${PATRONI_REPLICATION_USERNAME} 127.0.0.1/32 md5
+      initdb:
+      - auth-host: md5
+      - auth-local: trust
+      - encoding: UTF8
+      - locale: en_US.UTF-8
+      - data-checksums
+    restapi:
+      connect_address: '${PATRONI_KUBERNETES_POD_IP}:8008'
+    postgresql:
+      connect_address: '${PATRONI_KUBERNETES_POD_IP}:5432'
+      authentication:
+        superuser:
+          password: '${PATRONI_SUPERUSER_PASSWORD}'
+        replication:
+          password: '${PATRONI_REPLICATION_PASSWORD}'
+    tags: # Allow this node to start again, replicate and be prometed respectively
+      no_failover: false
+      no_replication: false
+      no_master: false
