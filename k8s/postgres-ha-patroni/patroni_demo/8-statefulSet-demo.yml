@@ -47,10 +47,10 @@ spec:
         - name: patroni-config
           mountPath: /home/postgres
         ports:
-            - containerPort: 5432
-              name: pg
-            - containerPort: 8008  # Add this
-              name: patroni-api
+          - containerPort: 5432
+            name: pg
+          - containerPort: 8008  # Add this
+            name: patroni-api
         env:
         - name: PATRONI_KUBERNETES_POD_IP
           valueFrom:

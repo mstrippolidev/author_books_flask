@@ -1,9 +1,8 @@
 apiVersion: v1
-kind: Service
+kind: Endpoints
 metadata:
-  name: patronidemo-config
+  name: cluster-db-ha
   labels:
     application: patroni
     cluster-name: cluster-db-ha
-spec:
-  clusterIP: None
+subsets: []
