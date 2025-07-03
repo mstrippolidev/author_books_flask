@@ -41,15 +41,11 @@ spec:
         - containerPort: 5432
           protocol: TCP
         volumeMounts:
+        - name: patroni-config
+          mountPath: /home/postgres/patroni.yml
+          subPath: patroni.yaml
         - mountPath: /home/postgres/pgdata
           name: pgdata
-        - name: patroni-config
-          mountPath: /home/postgres
-        ports:
-          - containerPort: 5432
-            name: pg
-          - containerPort: 8008  # Add this
-            name: patroni-api
         env:
         - name: PATRONI_KUBERNETES_POD_IP
           valueFrom:
@@ -91,8 +87,6 @@ spec:
           value: '0.0.0.0:8008'
       terminationGracePeriodSeconds: 0
       volumes:
-      - name: pgdata
-        emptyDir: {}
       - name: patroni-config
         configMap:
           name: patroni-config
