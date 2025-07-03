@@ -1,19 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: patronidemo-config-2
+  name: patronidemo-config
   labels:
     application: patroni
     cluster-name: cluster-db-ha
 spec:
   clusterIP: None
-  selector:
-    application: patroni
-    cluster-name: cluster-db-ha
-  ports:
-    - name: pg
-      port: 5432
-      targetPort: 5432
-    - name: api
-      port: 8008
-      targetPort: 8008
