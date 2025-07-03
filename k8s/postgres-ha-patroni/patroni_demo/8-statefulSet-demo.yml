@@ -64,7 +64,7 @@ spec:
         - name: PATRONI_KUBERNETES_USE_ENDPOINTS
           value: 'true'
         - name: PATRONI_KUBERNETES_LABELS
-          value: '{application: patroni, cluster-name: patronidemo}'
+          value: '{application: patroni, cluster-name: cluster-db-ha}'
         - name: PATRONI_SUPERUSER_USERNAME
           value: postgres
         - name: PATRONI_SUPERUSER_PASSWORD
