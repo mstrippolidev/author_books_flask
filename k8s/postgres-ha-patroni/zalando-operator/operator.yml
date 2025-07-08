@@ -1,0 +1,23 @@
+apiVersion: acid.zalan.do/v1
+kind: postgresql
+metadata:
+  name: flask_db
+  namespace: default
+spec:
+  teamId: "myteamDemo"
+  # 1 primary + 2 replicas
+  numberOfInstances: 3
+  postgresql:
+    version: "14"
+  # Persistent volume claim for each pod
+  volume:
+    size: 10Gi
+    storageClass: default
+  # Users and roles
+  users:
+    postgres:
+      - superuser
+      - createdb
+  # Databases: <db-name>: <owner>
+  databases:
+    flask_db_1: postgres
