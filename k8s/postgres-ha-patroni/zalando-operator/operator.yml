@@ -1,7 +1,7 @@
 apiVersion: acid.zalan.do/v1
 kind: postgresql
 metadata:
-  name: flask_db
+  name: flask-db
   namespace: default
 spec:
   teamId: "myteamDemo"
