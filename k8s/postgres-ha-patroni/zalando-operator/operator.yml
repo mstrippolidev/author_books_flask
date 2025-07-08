@@ -12,7 +12,7 @@ spec:
   # Persistent volume claim for each pod
   volume:
     size: 10Gi
-    storageClass: default
+    storageClass: gp2
   # Users and roles
   users:
     postgres:
