@@ -4,7 +4,6 @@ metadata:
   name: flask-db-migration
 spec:
   backoffLimit: 3
-  ttlSecondsAfterFinished: 600   # keep Pods for 10 minutes
   template:
     spec:
       containers:
