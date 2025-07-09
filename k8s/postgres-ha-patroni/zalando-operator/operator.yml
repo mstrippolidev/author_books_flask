@@ -21,3 +21,6 @@ spec:
   # Databases: <db-name>: <owner>
   databases:
     flask_db_1: postgres
+  # Tell the operator how to initially create your db (can you install here the extension like postgis)
+  preparedDatabases:
+    flask_db_1: {}
