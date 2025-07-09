@@ -11,7 +11,7 @@ spec:
     version: "14"
   # Persistent volume claim for each pod
   volume:
-    size: 10Gi
+    size: 5Gi
     storageClass: gp2
   # Users and roles
   users:
