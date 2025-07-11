@@ -18,7 +18,7 @@ spec:
         role: app # Schedule on nodes marked for app services
       containers:
         - name: flask-app
-          image: joseriosve/flask_app_distributed:v2
+          image: joseriosve/flask_app_distributed
           ports:
             - containerPort: 8000 # Flask application runs on port 8000
           envFrom: # Load environment variables from secrets

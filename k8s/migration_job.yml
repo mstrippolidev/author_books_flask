@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
         - name: migration-container
-          image: joseriosve/flask_app_distributed:v2
+          image: joseriosve/flask_app_distributed
           command: ["sh", "-c", "
             echo 'Running database migrations...';
             flask db upgrade"]
