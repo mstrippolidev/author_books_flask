@@ -13,11 +13,12 @@ spec:
   bootstrap:
     recovery:
       source: s3-restore-source # A name for the source config below
+      database: flask_db_1
     # I think this block is not necesary, because i can defined in the recovery block.
     # with the database and also the owner, and credentials
-    initdb:
-      # This creates the database 'flask_db_1' 
-      database: flask_db_1
+    # initdb:
+    #   # This creates the database 'flask_db_1' 
+    #   database: flask_db_1
 
   # Define the external S3 backup source
   externalClusters:
@@ -34,10 +35,10 @@ spec:
             key: AWS_SECRET_ACCESS_KEY
 
   # PostgreSQL configuration settings
-  postgresql:
-    parameters: # We can change anything from here
-      max_connections: '200'
-      shared_buffers: '256MB'
+  # postgresql:
+  #   parameters: # We can change anything from here
+  #     max_connections: '200'
+  #     shared_buffers: '256MB'
 
   # Enable monitoring with the default Prometheus exporter
   # monitoring:
