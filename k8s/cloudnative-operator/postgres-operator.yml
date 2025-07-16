@@ -1,0 +1,44 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-db-cluster
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:14.12
+  storage:
+    size: 5Gi
+    storageClass: "gp2"
+
+  # tell to backup
+  bootstrap:
+    recovery:
+      source: s3-restore-source # A name for the source config below
+    # I think this block is not necesary, because i can defined in the recovery block.
+    # with the database and also the owner, and credentials
+    initdb:
+      # This creates the database 'flask_db_1' 
+      database: flask_db_1
+
+  # Define the external S3 backup source
+  externalClusters:
+    - name: s3-restore-source # Must match the source name above
+      barmanObjectStore:
+        destinationPath: "s3://your-s3-bucket-name/backups/" # Path to your backups folder in your bucket
+        s3Credentials:
+          # Link to the secret you created
+          accessKeyId:
+            name: s3-backup-credentials
+            key: AWS_ACCESS_KEY_ID
+          secretAccessKey:
+            name: s3-backup-credentials
+            key: AWS_SECRET_ACCESS_KEY
+
+  # PostgreSQL configuration settings
+  postgresql:
+    parameters: # We can change anything from here
+      max_connections: '200'
+      shared_buffers: '256MB'
+
+  # Enable monitoring with the default Prometheus exporter
+  # monitoring:
+  #   enablePodMonitor: true
