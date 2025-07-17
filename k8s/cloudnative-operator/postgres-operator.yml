@@ -28,10 +28,10 @@ spec:
         s3Credentials:
           # Link to the secret you created
           accessKeyId:
-            name: s3-backup-credentials
+            name: s3-credentials
             key: AWS_ACCESS_KEY_ID
           secretAccessKey:
-            name: s3-backup-credentials
+            name: s3-credentials
             key: AWS_SECRET_ACCESS_KEY
 
   # PostgreSQL configuration settings
