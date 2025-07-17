@@ -24,7 +24,7 @@ spec:
   externalClusters:
     - name: s3-restore-source # Must match the source name above
       barmanObjectStore:
-        destinationPath: "s3://your-s3-bucket-name/backups/" # Path to your backups folder in your bucket
+        destinationPath: "s3://ms-petsland-1/backups/" # Path to your backups folder in your bucket
         s3Credentials:
           # Link to the secret you created
           accessKeyId:
