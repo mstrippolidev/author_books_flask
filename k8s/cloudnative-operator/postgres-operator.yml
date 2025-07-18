@@ -35,6 +35,7 @@ spec:
         # Use the correct IP or host name for the source database
         host: 172.31.240.1
         user: postgres
+        port: "5433"
         dbname: postgres
       password:
         name: s3-credentials
