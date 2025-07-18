@@ -11,28 +11,45 @@ spec:
 
   # tell to backup
   bootstrap:
-    recovery:
-      source: s3-restore-source # A name for the source config below
-      database: flask_db_1
+  #   recovery:
+  #     source: s3-restore-source # A name for the source config below
+  #     database: flask_db_1
     # I think this block is not necesary, because i can defined in the recovery block.
     # with the database and also the owner, and credentials
-    # initdb:
-    #   # This creates the database 'flask_db_1' 
-    #   database: flask_db_1
+    initdb:
+      # This creates the database 'flask_db_1' 
+      # database: flask_db_1
+      import: # Migrate the data from previous db
+        type: microservice # Required, tell that is one db
+        databases:
+          - flask_db_1
+        source:
+          externalCluster: my-windows
+
+    
 
   # Define the external S3 backup source
   externalClusters:
-    - name: s3-restore-source # Must match the source name above
-      barmanObjectStore:
-        destinationPath: "s3://ms-petsland-1/backups/" # Path to your backups folder in your bucket
-        s3Credentials:
-          # Link to the secret you created
-          accessKeyId:
-            name: s3-credentials
-            key: AWS_ACCESS_KEY_ID
-          secretAccessKey:
-            name: s3-credentials
-            key: AWS_SECRET_ACCESS_KEY
+    - name: my-windows
+      connectionParameters:
+        # Use the correct IP or host name for the source database
+        host: 172.31.240.1
+        user: postgres
+        dbname: postgres
+      password:
+        name: s3-credentials
+        key: DB_PASSWORD
+    # - name: s3-restore-source # Must match the source name above
+    #   barmanObjectStore:
+    #     destinationPath: "s3://ms-petsland-1/backups/" # Path to your backups folder in your bucket
+    #     s3Credentials:
+    #       # Link to the secret you created
+    #       accessKeyId:
+    #         name: s3-credentials
+    #         key: AWS_ACCESS_KEY_ID
+    #       secretAccessKey:
+    #         name: s3-credentials
+    #         key: AWS_SECRET_ACCESS_KEY
 
   # PostgreSQL configuration settings
   # postgresql:
