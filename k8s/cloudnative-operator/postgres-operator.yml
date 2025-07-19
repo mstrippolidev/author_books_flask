@@ -11,35 +11,46 @@ spec:
 
   # tell to backup
   bootstrap:
-  #   recovery:
+  #   recovery: I you have a bartman object in s3 or another cloud provider
   #     source: s3-restore-source # A name for the source config below
   #     database: flask_db_1
-    # I think this block is not necesary, because i can defined in the recovery block.
     # with the database and also the owner, and credentials
     initdb:
       # This creates the database 'flask_db_1' 
-      # database: flask_db_1
-      import: # Migrate the data from previous db
-        type: microservice # Required, tell that is one db
-        databases:
-          - flask_db_1
-        source:
-          externalCluster: my-windows
+      database: flask_db_1
+      # import: # Migrate the data from previous db
+      #   type: microservice # Required, tell that is one db
+      #   databases:
+      #     - flask_db_1
+      #   source:
+      #     externalCluster: my-windows
 
-    
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://ms-petsland-1/backups/
+      s3Credentials:
+        accessKeyId:
+          name: s3-credentials
+          key: AWS_ACCESS_KEY_ID
+        secretAccessKey:
+          name: s3-credentials
+          key: AWS_SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+
 
   # Define the external S3 backup source
-  externalClusters:
-    - name: my-windows
-      connectionParameters:
-        # Use the correct IP or host name for the source database
-        host: 172.31.240.1
-        user: postgres
-        port: "5433"
-        dbname: postgres
-      password:
-        name: s3-credentials
-        key: DB_PASSWORD
+  # externalClusters:
+  #   - name: my-windows
+  #     connectionParameters:
+  #       # Use the correct IP or host name for the source database
+  #       host: 172.31.240.1
+  #       user: postgres
+  #       port: 5433
+  #       dbname: postgres
+  #     password:
+  #       name: s3-credentials
+  #       key: DB_PASSWORD
     # - name: s3-restore-source # Must match the source name above
     #   barmanObjectStore:
     #     destinationPath: "s3://ms-petsland-1/backups/" # Path to your backups folder in your bucket
