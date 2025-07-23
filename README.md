@@ -33,33 +33,183 @@ This application is built with a strong focus on security, incorporating several
 
 ### JWT Authentication
 
-The application leverages **Flask-JWT-Extended** for robust token-based authentication.
+The application leverages **Flask-JWT-Extended** for robust token-based authentication. The `JWTManager` is initialized in `extension.py`, and custom callbacks are registered in `app.py` to handle user identity and token revocation.
 
 * **Token Generation:** Upon successful login (either via traditional username/password or Google OAuth), the API issues both `access_token` and `refresh_token`.
 * **User Identity Management:** A `user_identity_loader` is implemented to embed the user's `id` into the JWT, allowing for easy retrieval of user information from the database using `user_lookup_loader`.
-* **Token Revocation (Blocklist):** The `TokenBlocklist` model and `token_in_blocklist_loader` callback provide a mechanism to revoke JWTs, enhancing security by invalidating tokens upon logout or compromise.
+
+    ```python
+    # From app.py
+    @jwt_manager.user_identity_loader
+    def user_identity_lookup(user: User):
+        """
+            Pass the id of the user as sub for jwt body
+        """
+        return user.id
+
+    @jwt_manager.user_lookup_loader
+    def user_lookup_callback(_jwt_header, jwt_data):
+        """
+            Return the user instance that belongs to this claim.
+            Load the current_user object of flask with this info.
+        """
+        identity = jwt_data["sub"]
+        return User.query.filter_by(id=identity).one_or_none()
+    ```
+
+* **Token Revocation (Blocklist):** The `TokenBlocklist` model (defined in `admin/models.py`) and `token_in_blocklist_loader` callback provide a mechanism to revoke JWTs, enhancing security by invalidating tokens upon logout or compromise.
+
+    ```python
+    # From admin/models.py
+    class TokenBlocklist(db.Model):
+        """
+            For token unvalidation
+        """
+        __tablename__ = "token_blocklist"
+        __table_args__ = {'schema': 'admin'}
+        id = db.Column(db.Integer, primary_key=True)
+        jti = db.Column(db.String(36), nullable=False, index=True)
+        created_at = db.Column(db.DateTime, default=get_current_time)
+
+    # From app.py
+    @jwt_manager.token_in_blocklist_loader
+    def check_if_token_is_revoked(jwt_header, jwt_payload: dict) -> bool:
+        """
+            Expand the jwt_required decorator to check if the token is in the block list
+        """
+        jti = jwt_payload["jti"]
+        token = TokenBlocklist.query.filter_by(jti = jti).first()
+        return token is not None # True means that is not revoked yet
+    ```
 
 ### OAuth2 Integration with Google
 
-For a streamlined user experience, the application integrates **Authlib** for Google OAuth2 login.
+For a streamlined user experience, the application integrates **Authlib** for Google OAuth2 login. The `OAuth` object is initialized and Google is registered as a client in `app.py`.
 
 * **Simplified Onboarding:** Users can easily sign up and log in using their existing Google accounts, reducing friction.
 * **Secure User Information:** User details (email, name) are securely retrieved from Google after successful authentication.
 * **Automatic User Provisioning:** If a Google-authenticated user doesn't exist in the database, a new user account is automatically created, associating their Google information. JWTs are then issued for these users, consistent with the application's authentication flow.
 
+    ```python
+    # From app.py init_extensions function
+    oauth.init_app(app)
+    oauth.register(
+        name='google',
+        client_kwargs={'scope': 'openid email profile'},  # Required by Google
+        server_metadata_url='[https://accounts.google.com/.well-known/openid-configuration](https://accounts.google.com/.well-known/openid-configuration)'
+    )
+    app.oauth = oauth   # Attach OAuth to the app context
+
+    # From admin/routes/router_auth.py
+    @auth_blueprint.route('/login/google', methods = ['GET'])
+    def google_login():
+        google = current_app.oauth.google
+        redirect_uri = url_for('auth.google_auth', _external=True)
+        return google.authorize_redirect(redirect_uri)
+
+    @auth_blueprint.route('/authorize/google')
+    def google_auth():
+        google = current_app.oauth.google
+        token = google.authorize_access_token()
+        user_info = token.get('userinfo')
+
+        email = user_info.get("email")
+        name = user_info.get("name")
+        last_name = user_info.get('family_name')
+
+        user = User.query.filter(func.lower(User.email) == str(email).lower(),).first()
+        if not user:
+            user = User(
+                email=email,
+                username=email.split('@')[0],
+                first_name=name,
+                last_name=last_name,
+                password=None
+            )
+            db.session.add(user)
+            db.session.commit()
+
+        access_token = create_access_token(identity=user)
+        refresh_token = create_refresh_token(identity=user)
+
+        return jsonify(
+            message="Logged in with Google",
+            access_token=access_token,
+            refresh_token=refresh_token
+        )
+    ```
+
 ### Rate Limiting with Flask-Limiter
 
-To prevent brute-force attacks and ensure fair usage of the API, **Flask-Limiter** is implemented.
+To prevent brute-force attacks and ensure fair usage of the API, **Flask-Limiter** is implemented. The `Limiter` is initialized in `extension.py` with a global default limit.
 
 * **Per-Host Rate Limiting:** The `Limiter` is configured with `key_func=get_remote_address`, meaning requests are limited based on the client's IP address.
 * **Default Limit:** A `default_limits=["30 per minute"]` is applied globally, restricting each unique IP address to 30 requests per minute. This helps maintain API stability and prevents resource exhaustion.
 
+    ```python
+    # From extension.py
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+
+    limiter = Limiter(key_func=get_remote_address,default_limits=["30 per minute"])
+
+    # From app.py init_extensions function
+    limiter.init_app(app)
+    ```
+
 ### Role-Based Access Control (RBAC)
 
-The application implements a granular RBAC system using `UserRoleEnum` and a custom decorator.
+The application implements a granular RBAC system using `UserRoleEnum` (defined in `admin/models.py`) and a custom decorator (`decorator.py`).
 
 * **User Roles:** Users can have one of three distinct roles: `guest`, `admin`, or `superadmin`.
+
+    ```python
+    # From admin/models.py
+    import enum
+
+    class UserRoleEnum(enum.Enum):
+        guest = "guest"
+        admin = "admin"
+        superadmin = "superadmin"
+
+    class User(db.Model):
+        # ...
+        role = db.Column(db.Enum(UserRoleEnum), nullable=False, default=UserRoleEnum.guest)
+        # ...
+    ```
+
 * **`admin_required_post` Decorator:** This custom decorator is used to protect specific API endpoints. It checks the `role` of the `current_user` (obtained from the JWT) and allows access only if the user's role is `admin` or `superadmin`. `GET` requests are generally exempted from this restriction, allowing public viewing of data where appropriate. This ensures that sensitive operations are only performed by authorized personnel.
+
+    ```python
+    # From decorator.py
+    from flask import jsonify, request
+    from functools import wraps
+    from flask_jwt_extended import (current_user)
+    from admin.models import UserRoleEnum
+
+    def admin_required_post(f):
+        @wraps(f)
+        def decorator(*args, **kwargs):
+            """
+                Function to handle authenticated user role admin and superadmin
+            """
+            user = current_user
+            if request.method == 'GET':
+                return f(*args, **kwargs)
+            if user.role == UserRoleEnum.admin or user.role == UserRoleEnum.superadmin:
+                return f(*args, **kwargs)
+            return jsonify("Permission Denied! admin only"), 403
+        return decorator
+    ```
+    You'll see this decorator applied to routes in `authors/routes/router_author.py`:
+    ```python
+    # From authors/routes/router_author.py
+    @author_blueprint.route('author', methods = ['GET', 'POST'])
+    @jwt_required()
+    @admin_required_post # Applied here!
+    def handle_authors():
+        # ...
+    ```
 
 ---
 
