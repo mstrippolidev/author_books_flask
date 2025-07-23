@@ -10,12 +10,11 @@ This repository hosts a robust Flask API for managing books and authors, featuri
     -   [OAuth2 Integration with Google](#oauth2-integration-with-google)
     -   [Rate Limiting with Flask-Limiter](#rate-limiting-with-flask-limiter)
     -   [Role-Based Access Control (RBAC)](#role-based-access-control-rbac)
+-   [API Endpoints](#api-endpoints)
 -   [Kubernetes Deployment](#kubernetes-deployment)
     -   [1. Simple PostgreSQL Deployment with Persistent Volume](#1-simple-postgresql-deployment-with-persistent-volume)
     -   [2. PostgreSQL High Availability with Zalando Operator](#2-postgresql-high-availability-with-zalando-operator)
     -   [3. PostgreSQL High Availability with CloudNativePG Operator](#3-postgresql-high-availability-with-cloudnativepg-operator)
--   [API Endpoints](#api-endpoints)
-
 
 ## Features
 
@@ -25,6 +24,8 @@ This repository hosts a robust Flask API for managing books and authors, featuri
 * **Rate Limiting:** Protects against abuse and ensures API stability.
 * **Role-Based Authorization:** Restricts access to certain API endpoints based on user roles (Guest, Admin, Superadmin).
 * **Database Management:** Utilizes SQLAlchemy for ORM and Flask-Migrate for database migrations.
+
+---
 
 ## Security Enhancements
 
@@ -59,6 +60,89 @@ The application implements a granular RBAC system using `UserRoleEnum` and a cus
 
 * **User Roles:** Users can have one of three distinct roles: `guest`, `admin`, or `superadmin`.
 * **`admin_required_post` Decorator:** This custom decorator is used to protect specific API endpoints. It checks the `role` of the `current_user` (obtained from the JWT) and allows access only if the user's role is `admin` or `superadmin`. `GET` requests are generally exempted from this restriction, allowing public viewing of data where appropriate. This ensures that sensitive operations are only performed by authorized personnel.
+
+---
+
+## API Endpoints
+
+All API endpoints require authentication via JWT unless otherwise specified. Endpoints marked with **(Admin Required)** necessitate an authenticated user with an `admin` or `superadmin` role for `POST`, `PUT`, and `DELETE` operations. `GET` operations on these routes are typically accessible to any authenticated user.
+
+### Authentication Endpoints (`/auth`)
+
+* **`POST /auth/register`**
+    * **Description:** Registers a new user with a username, email, password, first name, and last name. A role can optionally be provided (defaults to `guest`).
+    * **Requires:** No authentication.
+* **`POST /auth/login`**
+    * **Description:** Authenticates a user with a username (or email) and password, returning an `access_token` and `refresh_token` upon successful login.
+    * **Requires:** No authentication.
+* **`GET /auth/login/google`**
+    * **Description:** Initiates the Google OAuth2 login flow, redirecting the user to Google's authentication page.
+    * **Requires:** No authentication.
+* **`GET /auth/authorize/google`**
+    * **Description:** Callback endpoint for Google OAuth2. Exchanges the authorization code for tokens and user information, then issues application-specific JWTs.
+    * **Requires:** No authentication (handled by Google OAuth flow).
+* **`POST /auth/refresh`**
+    * **Description:** Generates new `access_token` and `refresh_token` using a valid `refresh_token`. The old `refresh_token` is added to the blocklist.
+    * **Requires:** Valid `refresh_token`.
+* **`POST /auth/logout`**
+    * **Description:** Revokes the current `access_token` by adding its JTI to the blocklist, effectively logging out the user.
+    * **Requires:** Valid `access_token`.
+* **`GET /auth/who-i-am`**
+    * **Description:** Returns the details of the currently authenticated user.
+    * **Requires:** Valid `access_token`.
+
+### Author & Book Management Endpoints (`/author-books`)
+
+* **`GET /author-books/author`**
+    * **Description:** Retrieves a paginated list of authors. Supports optional `page`, `size`, and `search` (by name or biography) query parameters.
+    * **Requires:** Valid `access_token`.
+* **`POST /author-books/author`**
+    * **Description:** Creates a new author.
+    * **Requires:** Valid `access_token` **(Admin Required)**.
+* **`GET /author-books/author/<int:author_id>`**
+    * **Description:** Retrieves the details of a specific author by ID, including related books.
+    * **Requires:** Valid `access_token`.
+* **`PUT /author-books/author/<int:author_id>`**
+    * **Description:** Updates the details of an existing author by ID.
+    * **Requires:** Valid `access_token` **(Admin Required)**.
+* **`DELETE /author-books/author/<int:author_id>`**
+    * **Description:** Deletes an author by ID.
+    * **Requires:** Valid `access_token` **(Admin Required)**.
+* **`GET /author-books/book`**
+    * **Description:** Retrieves a paginated list of books. Supports optional `page`, `size`, and `search` (by title or description) query parameters.
+    * **Requires:** Valid `access_token`.
+* **`POST /author-books/book`**
+    * **Description:** Creates a new book.
+    * **Requires:** Valid `access_token` **(Admin Required)**.
+* **`GET /author-books/book/<int:book_id>`**
+    * **Description:** Retrieves the details of a specific book by ID, including related authors.
+    * **Requires:** Valid `access_token`.
+* **`PUT /author-books/book/<int:book_id>`**
+    * **Description:** Updates the details of an existing book by ID.
+    * **Requires:** Valid `access_token` **(Admin Required)**.
+* **`DELETE /author-books/book/<int:book_id>`**
+    * **Description:** Deletes a book by ID.
+    * **Requires:** Valid `access_token` **(Admin Required)**.
+* **`GET /author-books/book/<string:slug>`**
+    * **Description:** Retrieves the details of a specific book by its slug, including related authors.
+    * **Requires:** Valid `access_token`.
+* **`PUT /author-books/book/<string:slug>`**
+    * **Description:** Updates the details of an existing book by its slug.
+    * **Requires:** Valid `access_token` **(Admin Required)**.
+* **`DELETE /author-books/book/<string:slug>`**
+    * **Description:** Deletes a book by its slug.
+    * **Requires:** Valid `access_token` **(Admin Required)**.
+* **`POST /author-books/`**
+    * **Description:** Creates a new relationship between an author and a book using `author_id` and `book_id`.
+    * **Requires:** Valid `access_token` **(Admin Required)**.
+* **`PUT /author-books/<int:author_book_id>`**
+    * **Description:** Updates an existing author-book relationship by its ID.
+    * **Requires:** Valid `access_token` **(Admin Required)**.
+* **`DELETE /author-books/<int:author_book_id>`**
+    * **Description:** Deletes an author-book relationship by its ID.
+    * **Requires:** Valid `access_token` **(Admin Required)**.
+
+---
 
 ## Kubernetes Deployment
 
