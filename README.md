@@ -12,10 +12,17 @@ This repository hosts a robust Flask API for managing books and authors, featuri
     -   [Role-Based Access Control (RBAC)](#role-based-access-control-rbac)
 -   [API Endpoints](#api-endpoints)
 -   [Kubernetes Deployment](#kubernetes-deployment)
+    -   [Docker Image and CI/CD Pipeline](#docker-image-and-ci/cd-pipeline)
+    -   [AWS EKS Cluster Architecture](#aws-eks-cluster-architecture)
     -   [1. Simple PostgreSQL Deployment with Persistent Volume](#1-simple-postgresql-deployment-with-persistent-volume)
+        -   [PostgreSQL Persistent Volume Claim (PVC)](#postgresql-persistent-volume-claim-pvc)
+        -   [PostgreSQL ClusterIP Service](#postgresql-clusterip-service)
+        -   [PostgreSQL Deployment](#postgresql-deployment)
+        -   [Database Migration Job](#database-migration-job)
+        -   [Flask Application ClusterIP Service](#flask-application-clusterip-service)
+        -   [Flask Application Deployment](#flask-application-deployment)
     -   [2. PostgreSQL High Availability with Zalando Operator](#2-postgresql-high-availability-with-zalando-operator)
     -   [3. PostgreSQL High Availability with CloudNativePG Operator](#3-postgresql-high-availability-with-cloudnativepg-operator)
-
 ## Features
 
 * **CRUD Operations:** Full C.R.U.D. (Create, Read, Update, Delete) functionality for managing books and authors.
@@ -296,11 +303,312 @@ All API endpoints require authentication via JWT unless otherwise specified. End
 
 ## Kubernetes Deployment
 
-This application can be deployed on Kubernetes using various strategies for managing its PostgreSQL database.
+This application is designed for containerized deployment on Kubernetes, with a focus on modularity and scalability.
+
+### Docker Image and CI/CD Pipeline
+
+The application's Docker image is built using a multi-stage Dockerfile and automatically pushed to Docker Hub via GitHub Actions.
+
+* **Multi-Stage Dockerfile:** The `Dockerfile` employs a multi-stage build pattern to optimize image size and build speed.
+
+    ```dockerfile
+    # docker_files/Dockerfile
+    # Stage 1: Build Dependencies
+    FROM python:3.12-slim as builder
+    ENV PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONUNBUFFERED=1
+    WORKDIR /dependencies
+    COPY ./requirements.txt .
+    RUN pip install --upgrade pip && \
+        pip install --no-cache-dir --prefix=/dependencies -r requirements.txt
+
+    # Stage 2: Production Image
+    FROM python:3.12-slim
+    ENV PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONUNBUFFERED=1
+    WORKDIR /app
+    COPY --from=builder /dependencies /usr/local
+    COPY ./ .
+    RUN chmod +x /app/entrypoint.sh
+    EXPOSE 8000
+    ENTRYPOINT ["/app/entrypoint.sh"]
+    ```
+    This setup ensures that only the necessary runtime components and installed dependencies are included in the final image, reducing its footprint. By copying `requirements.txt` first, Docker can cache the dependency installation step, significantly speeding up subsequent builds if dependencies haven't changed.
+
+* **GitHub Actions CI/CD:** A GitHub Actions workflow (`.github/workflows/pipeline_docker.yml`) automates the process of building and pushing new Docker images to Docker Hub whenever changes are pushed to the `main` branch.
+
+    ```yaml
+    # .GitHub/workflows/pipeline_docker.yml
+    name: Docker push job
+    on:
+      push:
+        branches:
+          - main
+    jobs:
+      run-test:
+        runs-on: ubuntu-latest
+        environment: MAIN
+        steps:
+          - name: run test
+            run: echo "running test (checkout and run test to db test)"
+          - name: check values
+            run: echo ${{ secrets.DOCKER_USERNAME }}
+
+      build-push-docker-image:
+        runs-on: ubuntu-latest
+        environment: MAIN
+        needs: [run-test]
+        steps:
+          - name: checkout code
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 0
+          - name: Login to Docker Hub
+            uses: docker/login-action@v3
+            with:
+              username: ${{ secrets.DOCKER_USERNAME }}
+              password: ${{ secrets.DOCKER_PASSWORD }}
+          - name: Set up QEMU
+            uses: docker/setup-qemu-action@v3
+          - name: Set up Docker Buildx
+            uses: docker/setup-buildx-action@v3
+          - name: Build and push
+            uses: docker/build-push-action@v6
+            with:
+              context: .
+              file: docker_files/Dockerfile
+              push: true
+              tags: |
+                ${{ secrets.DOCKER_USERNAME }}/flask_app_distributed:latest
+                ${{ secrets.DOCKER_USERNAME }}/flask_app_distributed:${{ github.sha }}
+          - name: Log out from Docker Hub
+            run: docker logout
+    ```
+    This workflow ensures that the Docker image is always up-to-date with the latest codebase, ready for deployment. It includes steps for logging into Docker Hub, setting up QEMU and Buildx for multi-platform builds, and finally building and pushing the image with `latest` and `commit-SHA` tags.
+
+### AWS EKS Cluster Architecture
+
+The application is deployed on an **Amazon EKS (Elastic Kubernetes Service)** cluster. The cluster's networking is configured across three Availability Zones (AZs) with a total of six subnets: three public and three private.
+
+To ensure optimal resource allocation and security, the EKS cluster utilizes two distinct node groups:
+
+* **`role=app` Node Group:** Nodes in this group are dedicated to running the Flask application pods. These nodes are deployed in private subnets across AZ B and C. This allows the application pods to remain isolated from direct internet access, enhancing security. Traffic to the application is exposed via a public AWS Load Balancer (configured separately, typically via an Ingress Controller not shown in these basic manifests).
+* **`role=db` Node Group:** Nodes in this group are reserved for database-related pods (like PostgreSQL). This specific node group is isolated in a private subnet within AZ A. This separation ensures that sensitive database workloads run on dedicated infrastructure, minimizing interference and potentially allowing for different instance types or security configurations.
+
+This architecture offers flexibility. While the current setup uses private subnets for application and database nodes, users can adapt the configuration to their needs, such as:
+* Deploying entirely within public subnets for simpler setups.
+* Using private subnets with an Internet Gateway for "egress-only" architecture, allowing outbound traffic from pods but preventing direct inbound public access to the nodes.
 
 ### 1. Simple PostgreSQL Deployment with Persistent Volume
 
-This approach demonstrates a basic Kubernetes deployment of the Flask application with a single PostgreSQL database instance. The database data is persisted using a Kubernetes Persistent Volume. This setup is ideal for development and testing environments where high availability is not a primary concern.
+This section details the Kubernetes manifests for a basic, single-instance PostgreSQL deployment, suitable for development or demonstration purposes, along with the Flask application components.
+
+#### PostgreSQL Persistent Volume Claim (PVC)
+
+The `postgres-pvc.yml` manifest declares a `PersistentVolumeClaim` (PVC), which requests a block of persistent storage for the PostgreSQL database.
+
+```yaml
+# k8s/db_pvc.yml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  storageClassName: gp2 # for aws eks dynamic store ebs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+```
+
+* **`storageClassName: gp2`**: This specifies the `StorageClass` to use. In AWS EKS, `gp2` (or `gp3`) is a common `StorageClass` that dynamically provisions AWS EBS (Elastic Block Store) volumes. This ensures that the database data is stored durably and independently of the lifecycle of the PostgreSQL Pod.
+* **`accessModes: ReadWriteOnce`**: This means the volume can be mounted as read-write by a single node.
+* **`resources.requests.storage: 5Gi`**: Requests a 5 Gigabyte storage volume.
+
+#### PostgreSQL ClusterIP Service
+
+The `cluster-db-app.yml` manifest defines a Kubernetes `Service` of type `ClusterIP` for the PostgreSQL database.
+
+```yaml
+# k8s/cluster-db-app.yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-cluster-services
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    component: postgres
+```
+* **`type: ClusterIP`**: This creates an internal-only service, meaning it's only reachable from within the Kubernetes cluster.
+* **`port: 5432`**: The port exposed by the service.
+* **`targetPort: 5432`**: The port on the pods that the service directs traffic to (PostgreSQL's default port).
+* **`selector: component: postgres`**: This links the service to any pods that have the label `component: postgres`, ensuring that the Flask application can reach the database consistently via the service name `postgres-cluster-services`.
+
+#### PostgreSQL Deployment
+
+The `db_app.yml` manifest defines a Kubernetes `Deployment` for the PostgreSQL database.
+
+```yaml
+# k8s/db_app.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  labels:
+    component: postgres
+spec:
+  replicas: 1 # Only one DB instance in this setup
+  selector:
+    matchLabels:
+      component: postgres
+  template:
+    metadata:
+      labels:
+        component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:14-alpine
+          ports:
+            - containerPort: 5432 # PostgreSQL default port
+          env: # Using Kubernetes secrets for secure credentials
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: secrets-flask-app
+                  key: DB_PASSWORD
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: secrets-flask-app
+                  key: DB_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: secrets-flask-app
+                  key: DB_NAME
+          volumeMounts: # Persist database storage
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+              subPath: postgres
+      volumes: # List of availables volume for this development
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc # PVC for DB persistence
+      nodeSelector:
+        role: db # Ensures DB runs on specific nodes
+```
+* **`replicas: 1`**: Configures a single instance of the PostgreSQL database, suitable for development or non-HA setups.
+* **`image: postgres:14-alpine`**: Specifies the PostgreSQL Docker image to use.
+* **`env`**: Database credentials (`POSTGRES_PASSWORD`, `POSTGRES_USER`, `POSTGRES_DB`) are securely injected from a Kubernetes `Secret` named `secrets-flask-app` using `secretKeyRef`.
+* **`volumeMounts`** and **`volumes`**: Connects the `postgres-pvc` (defined above) to the container, ensuring that the database data persists even if the pod restarts or moves to another node.
+* **`nodeSelector: role: db`**: This critical part schedules the PostgreSQL pod exclusively onto nodes labeled with `role: db`, ensuring it runs on the dedicated database node group.
+
+#### Database Migration Job
+
+The `migration_job.yml` manifest defines a Kubernetes `Job` responsible for running Flask database migrations.
+
+```yaml
+# k8s/migration_job.yml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: flask-db-migration
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      containers:
+        - name: migration-container
+          image: joseriosve/flask_app_distributed
+          command: ["sh", "-c", "
+            echo 'Running database migrations...';
+            flask db upgrade"]
+          envFrom: # Load ALL secrets for environment variables
+            - secretRef:
+                name: secrets-flask-app
+      restartPolicy: OnFailure # Ensures the job runs only once
+```
+* **`kind: Job`**: Designed for tasks that run to completion. This job will execute the Flask-Migrate `flask db upgrade` command.
+* **`image: joseriosve/flask_app_distributed`**: Uses the same application Docker image, as it contains Flask-Migrate and access to the application's database models.
+* **`command`**: Executes a shell command to perform the database upgrade.
+* **`envFrom`**: All environment variables from the `secrets-flask-app` Secret are loaded into the job container, ensuring it has the necessary database connection details.
+* **`restartPolicy: OnFailure`**: Ensures that if the migration job fails, it will be retried (up to `backoffLimit`). Once successful, the job completes and does not restart. This job should be run *after* the PostgreSQL database is up and running and *before* the Flask application deployment.
+
+#### Flask Application ClusterIP Service
+
+The `cluster_flask_app.yml` manifest defines a Kubernetes `Service` of type `ClusterIP` for the Flask application.
+
+```yaml
+# k8s/cluster_flask_app.yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: flask-app-cluster-ip-service
+spec:
+  type: ClusterIP
+  selector:
+    component: flask-app
+  ports:
+    - port: 80 # Expose port
+      targetPort: 8000
+```
+* **`type: ClusterIP`**: Creates an internal service, making the Flask application accessible from other pods within the cluster (e.g., from an Ingress controller or other microservices).
+* **`port: 80`**: The service exposes port 80.
+* **`targetPort: 8000`**: Maps incoming traffic from port 80 to port 8000 on the application pods, which is where Gunicorn listens.
+* **`selector: component: flask-app`**: Links this service to all pods labeled with `component: flask-app`.
+
+#### Flask Application Deployment
+
+The `flask_app.yml` manifest defines the Kubernetes `Deployment` for the Flask application.
+
+```yaml
+# k8s/flask_app.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-app-deployment
+  labels:
+    component: flask-app
+spec:
+  replicas: 2 # Running multiple instances for load balancing
+  selector:
+    matchLabels:
+      component: flask-app
+  template:
+    metadata:
+      labels:
+        component: flask-app
+    spec:
+      nodeSelector:
+        role: app # Schedule on nodes marked for app services
+      containers:
+        - name: flask-app
+          image: joseriosve/flask_app_distributed
+          ports:
+            - containerPort: 8000 # Flask application runs on port 8000
+          envFrom: # Load environment variables from secrets
+            - secretRef:
+                name: secrets-flask-app
+          command: # Gunicorn command to start Flask
+            - "gunicorn"
+            - "--workers"
+            - "3"
+            - "--bind"
+            - "0.0.0.0:8000"
+            - "app:create_app()"
+```
+* **`replicas: 2`**: Deploys two instances (pods) of the Flask application, distributing the load and providing basic high availability. These pods are intentionally placed in different AZs (AZ B and C) from the database to improve resilience.
+* **`image: joseriosve/flask_app_distributed`**: Specifies the Docker image for the Flask application.
+* **`ports`**: Exposes port 8000, which is where the Gunicorn server inside the container listens.
+* **`envFrom`**: Loads all environment variables from the `secrets-flask-app` Secret, providing the application with necessary configurations like database connection strings and JWT secrets.
+* **`command`**: Overrides the Dockerfile's `ENTRYPOINT` to explicitly run `gunicorn` with 3 workers, binding to all interfaces on port 8000, and loading the Flask application via `app:create_app()`. The number of Gunicorn workers can be adjusted based on the EC2 instance type's CPU cores.
+* **`nodeSelector: role: app`**: This ensures that the Flask application pods are scheduled only on nodes within the dedicated application node group, which are in private subnets across AZ B and C.
 
 ### 2. PostgreSQL High Availability with Zalando Operator
 
