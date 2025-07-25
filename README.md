@@ -1,6 +1,6 @@
 # Flask Books & Authors API
 
-This repository hosts a robust Flask API for managing books and authors, featuring advanced security measures and flexible Kubernetes deployment strategies.
+This repository showcases a **robust Flask API** for comprehensive book and author management, engineered with a strong emphasis on **advanced security** and **flexible, high-availability Kubernetes deployment strategies**. It features secure user authentication via **JWT and OAuth2 (Google)**, **rate limiting**, **Role-Based Access Control (RBAC)**, and demonstrates sophisticated deployments on **AWS EKS** using both a simple PostgreSQL setup, and highly available clusters managed by **Zalando PostgreSQL Operator** and **CloudNativePG Operator**.
 
 ## Table of Contents
 
