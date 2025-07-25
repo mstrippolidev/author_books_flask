@@ -22,6 +22,12 @@ This repository hosts a robust Flask API for managing books and authors, featuri
         -   [Flask Application ClusterIP Service](#flask-application-clusterip-service)
         -   [Flask Application Deployment](#flask-application-deployment)
     -   [2. PostgreSQL High Availability with Zalando Operator](#2-postgresql-high-availability-with-zalando-operator)
+        -   [Installation of Zalando PostgreSQL Operator](#installation-of-zalando-postgresql-operator)
+        -   [Deploying the Highly Available PostgreSQL Cluster](#deploying-the-highly-available-postgresql-cluster)
+        -   [Verifying Cluster Deployment](#verifying-cluster-deployment)
+        -   [Connecting the Flask Application to the Zalando PostgreSQL Cluster](#connecting-the-flask-application-to-the-zalando-postgresql-cluster)
+        -   [Benefits of Using Zalando PostgreSQL Operator](#benefits-of-using-zalando-postgresql-operator)
+        -   [Further Improvements to the Zalando Operator Manifest](#further-improvements-to-the-zalando-operator-manifest)
     -   [3. PostgreSQL High Availability with CloudNativePG Operator](#3-postgresql-high-availability-with-cloudnativepg-operator)
 ## Features
 
@@ -612,7 +618,151 @@ spec:
 
 ### 2. PostgreSQL High Availability with Zalando Operator
 
-This section will detail the deployment of a highly available PostgreSQL cluster using the **Zalando PostgreSQL Operator**. This operator automates the management, scaling, and recovery of PostgreSQL instances, providing a robust solution for production environments.
+For production-grade high availability and automated management of PostgreSQL, this project leverages the **Zalando PostgreSQL Operator**. This operator extends Kubernetes to manage PostgreSQL clusters, including features like replication, failover, and scaling, greatly simplifying the operational overhead.
+
+#### Installation of Zalando PostgreSQL Operator
+
+The Zalando PostgreSQL Operator is installed using Helm, the Kubernetes package manager.
+
+1.  **Add the Helm Repository:** First, add the Zalando PostgreSQL Operator Helm repository to your Helm configuration:
+
+    ```bash
+    helm repo add postgres-operator-charts [https://opensource.zalando.com/postgres-operator/charts/postgres-operator](https://opensource.zalando.com/postgres-operator/charts/postgres-operator)
+    ```
+
+2.  **Install the Operator:** Once the repository is added, install the operator into your Kubernetes cluster. By default, it will be installed in the `default` namespace unless specified otherwise.
+
+    ```bash
+    helm install postgres-operator postgres-operator-charts/postgres-operator
+    ```
+
+3.  **Verify Operator Status:** After installation, confirm that the operator's pod is running successfully in your cluster:
+
+    ```bash
+    kubectl get pod -l app.kubernetes.io/name=postgres-operator
+    ```
+    A running pod indicates the operator is ready to manage PostgreSQL clusters.
+
+#### Deploying the Highly Available PostgreSQL Cluster
+
+Once the operator is active, you define your desired PostgreSQL cluster configuration using a custom resource definition (CRD) provided by the operator. The `operator.yml` manifest specifies the details of the `flask-db` PostgreSQL cluster.
+
+```yaml
+# k8s/postgres-ha-patroni/zalando-operator/operator.yml
+apiVersion: acid.zalan.do/v1
+kind: postgresql
+metadata:
+  name: flask-db
+  namespace: default
+spec:
+  teamId: "myteamDemo"
+  # 1 primary + 2 replicas
+  numberOfInstances: 3
+  postgresql:
+    version: "14"
+  # Persistent volume claim for each pod
+  volume:
+    size: 5Gi
+    storageClass: gp2
+  # Users and roles
+  users:
+    flask_user:
+      - superuser
+      - createdb
+  # Databases: <db-name>: <owner>
+  databases:
+    flask_db_1: flask_user
+  # Tell the operator how to initially create your db (can you install here the extension like postgis)
+  preparedDatabases:
+    flask_db_1: {}
+```
+**Manifest Breakdown:**
+
+* **`apiVersion: acid.zalan.do/v1`**, **`kind: postgresql`**: This indicates that we are defining a custom PostgreSQL cluster resource managed by the Zalando operator.
+* **`metadata.name: flask-db`**: This is the name of your PostgreSQL cluster. The operator will create a Kubernetes Service with this name, allowing your application to connect.
+* **`numberOfInstances: 3`**: This crucial setting configures a high-availability cluster with one primary PostgreSQL instance and two replica instances. The operator automatically sets up replication (using Patroni) and handles failover.
+* **`postgresql.version: "14"`**: Specifies the desired PostgreSQL version for your cluster.
+* **`volume.size: 5Gi`**: Each PostgreSQL pod (primary and replicas) will request a Persistent Volume of 5 Gigabytes.
+* **`volume.storageClass: gp2`**: Similar to the simple deployment, this uses the `gp2` storage class, which dynamically provisions AWS EBS volumes for each pod's persistent storage, ensuring data durability across node failures.
+* **`users.flask_user`**: Defines a new database user named `flask_user` and grants them `superuser` and `createdb` privileges. The operator will automatically create this user and its credentials as a Kubernetes Secret.
+* **`databases.flask_db_1: flask_user`**: Creates a database named `flask_db_1` and sets its owner to the `flask_user` defined above.
+* **`preparedDatabases.flask_db_1: {}`**: This section can be used to run initial SQL statements or enable extensions (e.g., `CREATE EXTENSION postgis;`) when the database is first created. In this case, it's left empty, meaning only the database `flask_db_1` will be created for the `flask_user`.
+
+#### Verifying Cluster Deployment
+
+After applying the `operator.yml` manifest, the Zalando operator will provision the PostgreSQL pods. You can monitor their status with:
+
+```bash
+kubectl get pods -l application=spilo -L spilo-role
+```
+This command lists all pods managed by the Patroni (Spilo) PostgreSQL cluster, showing their role (master/replica).
+
+#### Connecting the Flask Application to the Zalando PostgreSQL Cluster
+
+To connect the Flask application to this highly available PostgreSQL cluster, I need to update your database connection string in the `.env` file used by the flask application. (I conect throug secrets). 
+
+1.  **Create the Secrets:** Ensure your Kubernetes secret `secrets-flask-app` exists, populated from your local `.env` file. If you haven't already, or if you've updated your `.env` file, run:
+
+    ```bash
+    kubectl create secret generic secrets-flask-app --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
+    ```
+
+2.  **Update `.env` `DB_HOST`:** Edit your local `.env` file. The `DB_HOST` environment variable for the Flask application must now point to the Kubernetes Service created by the Zalando operator for your cluster. The format is `<cluster-name>.<namespace>.svc.cluster.local`.
+
+    ```
+    DB_HOST=flask-db.default.svc.cluster.local
+    DB_USER=flask_user  # or postgres
+    DB_PASSWORD=<password_from_below>
+    DB_NAME=flask_db_1
+    ```
+
+3.  **Retrieve Passwords:** The Zalando operator automatically generates strong passwords for the created users and stores them in Kubernetes Secrets.
+    * **For the `postgres` superuser:**
+
+        ```bash
+        kubectl get secret postgres.flask-db.credentials.postgresql.acid.zalan.do \
+          -n default \
+          -o jsonpath='{.data.password}' | base64 --decode; echo
+        ```
+
+    * **For the `flask_user`:**
+
+        ```bash
+        kubectl get secret flask-user.flask-db.credentials.postgresql.acid.zalan.do --namespace default -o 'jsonpath={.data.password}' | base64 -d
+        ```
+    Copy the retrieved password and update your local `.env` file.
+
+
+#### Benefits of Using Zalando PostgreSQL Operator
+
+* **High Availability (HA):** Automates the setup of a highly available PostgreSQL cluster with primary and replica instances, ensuring continuous database operation even during node failures.
+* **Automated Failover:** Utilizes Patroni to handle automatic primary elections and failover, minimizing downtime.
+* **Simplified Management:** Reduces the manual effort required for deploying, scaling, and maintaining PostgreSQL, treating it as a native Kubernetes resource.
+* **Dynamic Scaling:** Easily scale your cluster by changing the `numberOfInstances` in the manifest.
+* **Secure Credential Management:** Automatically generates and manages database user credentials as Kubernetes Secrets.
+* **Backup/Restore Capabilities:** (Not explicitly shown in this basic manifest, but supported) The operator integrates with popular backup solutions for robust data protection.
+
+#### Further Improvements to the Zalando Operator Manifest
+
+While the provided manifest sets up a functional HA cluster, it can be enhanced for production environments:
+
+* **Resource Limits and Requests:** Add `resources` (CPU and memory requests/limits) to the `postgresql` specification to ensure pods get adequate resources and don't consume too much.
+* **Connection Pooling:** Integrate a connection pooler like PgBouncer (often deployed as a sidecar or a separate service) to efficiently manage database connections from the application.
+* **Monitoring:** Configure Prometheus metrics exposure via the operator for detailed monitoring of PostgreSQL performance and health.
+* **Backup Configuration:** Add a `backup` section to specify scheduled backups to an S3 bucket or other storage.
+* **PostgreSQL Extensions:** Use the `preparedDatabases` section to enable necessary PostgreSQL extensions, such as PostGIS:
+
+    ```yaml
+    preparedDatabases:
+      flask_db_1:
+        extensions:
+          - name: postgis
+            version: "3.3" # or the desired version
+    ```
+* **Custom Parameters:** Fine-tune PostgreSQL parameters (e.g., `shared_buffers`, `work_mem`) by adding a `parameters` section under `postgresql`.
+* **Affinity/Anti-Affinity:** Refine pod scheduling using `affinity` rules to ensure primary and replica pods are distributed across different nodes, racks, or availability zones for better resilience.
+* **Logging:** Configure logging destinations and levels for better observability.
+
 
 ### 3. PostgreSQL High Availability with CloudNativePG Operator
 
