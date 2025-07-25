@@ -28,7 +28,12 @@ This repository hosts a robust Flask API for managing books and authors, featuri
         -   [Connecting the Flask Application to the Zalando PostgreSQL Cluster](#connecting-the-flask-application-to-the-zalando-postgresql-cluster)
         -   [Benefits of Using Zalando PostgreSQL Operator](#benefits-of-using-zalando-postgresql-operator)
         -   [Further Improvements to the Zalando Operator Manifest](#further-improvements-to-the-zalando-operator-manifest)
-    -   [3. PostgreSQL High Availability with CloudNativePG Operator](#3-postgresql-high-availability-with-cloudnativepg-operator)
+     -   [3. PostgreSQL High Availability with CloudNativePG Operator](#3-postgresql-high-availability-with-cloudnativepg-operator)
+        -   [Installation of CloudNativePG Operator](#installation-of-cloudnativepg-operator)
+        -   [Deploying the CloudNativePG Cluster](#deploying-the-cloudnativepg-cluster)
+        -   [Connecting the Flask Application to CloudNativePG](#connecting-the-flask-application-to-cloudnativepg)
+        -   [Benefits of Using CloudNativePG Operator](#benefits-of-using-cloudnativepg-operator)
+        -   [Further Improvements to the CloudNativePG Manifest](#further-improvements-to-the-cloudnativepg-manifest)
  
 ## Features
 
@@ -767,4 +772,212 @@ While the provided manifest sets up a functional HA cluster, it can be enhanced 
 
 ### 3. PostgreSQL High Availability with CloudNativePG Operator
 
-This section will cover the deployment of a highly available PostgreSQL cluster using the **CloudNativePG Operator**. Similar to the Zalando operator, CloudNativePG streamlines the deployment and management of PostgreSQL within Kubernetes, focusing on Cloud Native principles and offering features like backup/restore and disaster recovery.
+The **CloudNativePG Operator** is another robust solution for managing PostgreSQL clusters directly within Kubernetes. It's widely adopted for its simplicity, strong resilience, and native Kubernetes approach, providing a comprehensive solution for high-availability, backup, and recovery.
+
+#### Installation of CloudNativePG Operator
+
+The CloudNativePG Operator is installed by applying its manifest directly to your Kubernetes cluster.
+
+1.  **Apply the Operator Manifest:** Use `kubectl apply` with server-side apply to install the operator:
+
+    ```bash
+    kubectl apply --server-side -f \
+      [https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.26/releases/cnpg-1.26.0.yaml](https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.26/releases/cnpg-1.26.0.yaml)
+    ```
+
+2.  **Verify Operator Status:** After applying the manifest, confirm that the operator's controller manager deployment is running successfully. It usually runs in the `cnpg-system` namespace.
+
+    ```bash
+    kubectl rollout status deployment \
+      -n cnpg-system cnpg-controller-manager
+    ```
+    Wait until the rollout reports "successfully rolled out" to ensure the operator is fully operational.
+
+#### Deploying the CloudNativePG Cluster
+
+Once the CloudNativePG operator is active, you can define your PostgreSQL cluster using a `Cluster` custom resource. The `postgres-operator.yml` manifest below configures a highly available PostgreSQL cluster with integrated backup capabilities.
+
+```yaml
+# k8s/cloudnative-operator/postgres-operator.yml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-db-cluster
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:14.12
+  storage:
+    size: 5Gi
+    storageClass: "gp2"
+
+  bootstrap:
+    initdb:
+      database: flask_db_1
+
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://ms-petsland-1/backups/
+      s3Credentials:
+        accessKeyId:
+          name: s3-credentials
+          key: AWS_ACCESS_KEY_ID
+        secretAccessKey:
+          name: s3-credentials
+          key: AWS_SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+
+  # The following commented sections illustrate additional functionalities
+  # that can be configured with CloudNativePG, such as recovery from backups,
+  # database import/migration, external cluster definitions, custom PostgreSQL
+  # parameters, and monitoring integration.
+
+  # bootstrap:
+  #   recovery: # If you have a barman object in s3 or another cloud provider
+  #     source: s3-restore-source # A name for the source config below
+  #     database: flask_db_1
+  #   initdb:
+  #     database: flask_db_1
+  #     import: # Migrate the data from previous db
+  #       type: microservice # Required, tell that is one db
+  #       databases:
+  #         - flask_db_1
+  #       source:
+  #         externalCluster: my-windows
+
+  # externalClusters:
+  #   - name: my-windows
+  #     connectionParameters:
+  #       host: 172.31.240.1 # Use the correct IP or host name for the source database
+  #       user: postgres
+  #       port: 5433
+  #       dbname: postgres
+  #     password:
+  #       name: s3-credentials
+  #       key: DB_PASSWORD
+  #   - name: s3-restore-source # Must match the source name above
+  #     barmanObjectStore:
+  #       destinationPath: "s3://ms-petsland-1/backups/" # Path to your backups folder in your bucket
+  #       s3Credentials:
+  #         accessKeyId:
+  #           name: s3-credentials
+  #           key: AWS_ACCESS_KEY_ID
+  #         secretAccessKey:
+  #           name: s3-credentials
+  #           key: AWS_SECRET_ACCESS_KEY
+
+  # postgresql:
+  #   parameters: # We can change anything from here
+  #     max_connections: '200'
+  #     shared_buffers: '256MB'
+
+  # monitoring:
+  #   enablePodMonitor: true
+```
+**Manifest Breakdown (Active Configuration):**
+
+* **`apiVersion: postgresql.cnpg.io/v1`**, **`kind: Cluster`**: This defines a custom PostgreSQL cluster resource managed by the CloudNativePG operator.
+* **`metadata.name: postgres-db-cluster`**: This is the logical name for your PostgreSQL cluster. The operator will create associated Kubernetes Services (e.g., `postgres-db-cluster-rw` for read-write, `postgres-db-cluster-ro` for read-only) that your application will use to connect.
+* **`instances: 3`**: Configures a highly available PostgreSQL cluster with three instances. CloudNativePG will automatically set up streaming replication and manage failover using native PostgreSQL capabilities.
+* **`imageName: ghcr.io/cloudnative-pg/postgresql:14.12`**: Specifies the exact Docker image to use for your PostgreSQL pods. It's recommended to use images provided by CloudNativePG for full compatibility.
+* **`storage.size: 5Gi`**: Each PostgreSQL instance (pod) will request a Persistent Volume of 5 Gigabytes.
+* **`storage.storageClass: "gp2"`**: Specifies the `StorageClass` for dynamic provisioning of persistent volumes. On AWS EKS, `gp2` (or `gp3`) provisions EBS volumes, ensuring data persistence and durability for each database instance.
+* **`bootstrap.initdb.database: flask_db_1`**: This section instructs the operator to create a database named `flask_db_1` during the initial setup of the cluster. CloudNativePG automatically creates a default owner user for this database (with the same name, `flask_db_1`, unless explicitly overridden, which is good for simplicity and integration).
+* **`backup.barmanObjectStore`**: This block configures integrated backups to an S3-compatible object store using Barman, a popular PostgreSQL backup tool.
+    * **`destinationPath: s3://ms-petsland-1/backups/`**: Specifies the S3 bucket and prefix where backups will be stored.
+    * **`s3Credentials`**: References a Kubernetes Secret named `s3-credentials` which should contain your AWS access key ID (`AWS_ACCESS_KEY_ID`) and secret access key (`AWS_SECRET_ACCESS_KEY`). This ensures secure access to your S3 bucket.
+    * **`wal.compression: gzip`**: Configures Write-Ahead Log (WAL) archiving to use gzip compression, saving storage space for backups.
+
+**Manifest Breakdown (Commented-out Functionalities - for advanced use cases):**
+
+The commented sections in the manifest highlight powerful features of CloudNativePG for advanced scenarios:
+
+* **`bootstrap.recovery`**: Allows restoring a PostgreSQL cluster from an existing Barman backup stored in an object store (like S3) during initial cluster creation. This is vital for disaster recovery.
+* **`bootstrap.initdb.import`**: Facilitates migration of data from an existing external PostgreSQL database (e.g., from a virtual machine or another Kubernetes cluster) during the initial cluster setup. This can be used for "lift-and-shift" migrations.
+* **`externalClusters`**: Used in conjunction with `bootstrap.initdb.import` or `bootstrap.recovery` to define connection parameters to external PostgreSQL sources or backup sources.
+* **`postgresql.parameters`**: Enables fine-grained control over PostgreSQL configuration parameters (e.g., `max_connections`, `shared_buffers`). This allows optimizing database performance based on your workload.
+* **`monitoring.enablePodMonitor: true`**: Integrates with Prometheus for comprehensive monitoring of your PostgreSQL cluster by automatically creating a `PodMonitor` resource.
+
+#### Connecting the Flask Application to CloudNativePG
+
+To connect your Flask application to the CloudNativePG cluster, you will primarily interact with the Kubernetes Services created by the operator. CloudNativePG, by default, sets up several services for your cluster:
+
+* `<cluster-name>-rw` (e.g., `postgres-db-cluster-rw`): Points to the primary instance for read-write operations.
+* `<cluster-name>-ro` (e.g., `postgres-db-cluster-ro`): Points to read-only replicas for load balancing read operations.
+* `<cluster-name>-r` (e.g., `postgres-db-cluster-r`): Points to all instances (primary and replicas) for read-only workloads, offering a more flexible read pool.
+
+For a typical application, you'll connect to the read-write service.
+
+1.  **Retrieve Connection Details from Secret:** CloudNativePG automatically generates a Kubernetes Secret containing the credentials for the application database user. By default, if you specify `initdb.database: flask_db_1` without an explicit `owner`, CloudNativePG will create a user with the same name as the database (`flask_db_1`) and generate a secret for it. The secret name will typically be `<cluster-name>-app` or, in cases where the database name is used as the user, potentially `<cluster-name>-<db-name>`. For the given manifest, the primary application secret is likely named `postgres-db-cluster-app`.
+
+    To retrieve the password for the default application user (e.g., `flask_db_1` if no other owner is specified, or `app` by convention if no database is specified), use the following command to decode the password from the secret created by CloudNativePG:
+
+    ```bash
+    kubectl get secret postgres-db-cluster-app \
+      -o jsonpath='{.data.password}' | base64 --decode && echo
+    ```
+    This command specifically fetches the `password` key from the `postgres-db-cluster-app` secret and decodes it. You can change `.data.password` to other keys like `.data.username`, `.data.uri`, etc., to get other connection details.
+
+2.  **Update `.env` File:** Edit your local `.env` file to include the correct connection details for your Flask application.
+
+    ```
+    DB_HOST=postgres-db-cluster-rw.default.svc.cluster.local # Connect to the read-write service
+    DB_USER=flask_db_1                                        # Or the specific user if defined in manifest
+    DB_PASSWORD=<password_retrieved_above>
+    DB_NAME=flask_db_1
+    ```
+    * **`DB_HOST`**: Use the fully qualified domain name (FQDN) of the read-write Kubernetes Service. The format is `<service-name>.<namespace>.svc.cluster.local`.
+    * **`DB_USER`**: If you didn't specify a `users` section in the CloudNativePG manifest and only used `initdb.database`, the default application user will have the same name as the database (e.g., `flask_db_1`).
+    * **`DB_PASSWORD`**: Use the password retrieved from the Kubernetes secret.
+
+3.  **Apply Changes to Kubernetes Secret:** After updating your local `.env` file, recreate or update your `secrets-flask-app` Kubernetes Secret
+
+#### Benefits of Using CloudNativePG Operator
+
+CloudNativePG stands out as a preferred choice for PostgreSQL on Kubernetes due to several key advantages:
+
+* **Kubernetes-Native Design:** It leverages Kubernetes APIs directly for high availability, scaling, and lifecycle management, avoiding external tools for failover (unlike Patroni-based solutions where Patroni itself is external to K8s' core HA mechanism). This makes it feel very much like a native Kubernetes component.
+* **High Availability & Self-Healing:** Automatically manages primary-replica setups with streaming replication and seamless failover, promoting the most aligned replica to primary in case of failure. It also automatically recreates failed replicas.
+* **Integrated Backup and Recovery:** Includes built-in support for continuous backups to object stores (like S3) using Barman, enabling robust Point-In-Time-Recovery (PITR) and disaster recovery strategies.
+* **Simplified Operations:** Automates many DBA tasks, from initial deployment and user management to minor version upgrades and configuration tuning.
+* **Declarative Configuration:** Everything is defined in Kubernetes manifests, promoting GitOps practices and ensuring consistency.
+* **Connection Pooling (Optional):** Supports integration with PgBouncer through its own `Pooler` custom resource, providing a scalable and efficient connection management layer.
+* **Observability:** Offers native Prometheus exporter for detailed monitoring and structured JSON logging for easy integration with log aggregation systems.
+* **Data Migration Capabilities:** Provides declarative options for importing existing databases (offline or online) into a new CloudNativePG cluster, simplifying migrations.
+
+#### Further Improvements to the CloudNativePG Manifest
+
+While the provided manifest is a solid starting point for a highly available database, here are ways to enhance it for production-readiness and advanced scenarios:
+
+* **Resource Management:** Explicitly define `resources.requests` and `resources.limits` for CPU and memory within the `spec` to ensure stable performance and prevent resource starvation or overconsumption by the database pods. This is crucial for "Guaranteed" QoS.
+    ```yaml
+    spec:
+      # ... other configurations
+      resources:
+        requests:
+          memory: "1Gi"
+          cpu: "500m" # 0.5 CPU cores
+        limits:
+          memory: "2Gi"
+          cpu: "1000m" # 1 CPU core
+    ```
+* **Scheduled Backups:** While `barmanObjectStore` is configured, consider adding a `ScheduledBackup` resource to define a cron-like schedule for full base backups, complementing the continuous WAL archiving.
+* **PostgreSQL Parameters:** Utilize the `postgresql.parameters` section to fine-tune PostgreSQL settings (e.g., `max_connections`, `shared_buffers`, `work_mem`, `wal_buffers`) based on your workload and cluster size for optimal performance.
+* **Monitoring Integration:** Uncomment and configure the `monitoring` section (`enablePodMonitor: true`) to expose Prometheus metrics, allowing you to build comprehensive Grafana dashboards for your database.
+* **Custom Users and Roles:** For more granular access control, explicitly define additional users and roles in the manifest with specific privileges, rather than relying solely on the default database owner.
+* **Node Affinity/Anti-Affinity and Tolerations:** Implement advanced scheduling rules using `affinity` and `tolerations` to ensure database pods are distributed across different nodes or availability zones, or to dedicate specific nodes for database workloads. CloudNativePG applies anti-affinity by default to distribute instances.
+* **Connection Pooling with PgBouncer:** Deploy a `Pooler` custom resource alongside your cluster to introduce PgBouncer for efficient connection management, reducing the load on your PostgreSQL server from numerous short-lived application connections.
+* **TLS/SSL Configuration:** Leverage CloudNativePG's native TLS support. While it generates certificates by default, you can integrate with `cert-manager` or bring your own certificates for enhanced security.
+* **PostGIS and other Extensions:** If your application requires specific PostgreSQL extensions (like PostGIS for geospatial data), you can enable them automatically during `initdb` or via `pg_dump` with an import strategy. For example:
+    ```yaml
+    bootstrap:
+      initdb:
+        database: flask_db_1
+        # Example for PostGIS extension (requires image with PostGIS)
+        # However, it's often better to enable extensions via SQL after initdb
+        # or in a post-init script for full control.
+        # This example shows how to potentially add init-time SQL:
+        # initSQL:
+        #   - CREATE EXTENSION IF NOT EXISTS postgis;
+    ```
+* **WAL Disk Space Safeguard:** CloudNativePG includes features to prevent WAL disk space exhaustion, ensuring the cluster safely stops rather than entering an unrecoverable state, which is a good practice to be aware of.
