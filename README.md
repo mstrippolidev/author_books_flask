@@ -29,6 +29,7 @@ This repository hosts a robust Flask API for managing books and authors, featuri
         -   [Benefits of Using Zalando PostgreSQL Operator](#benefits-of-using-zalando-postgresql-operator)
         -   [Further Improvements to the Zalando Operator Manifest](#further-improvements-to-the-zalando-operator-manifest)
     -   [3. PostgreSQL High Availability with CloudNativePG Operator](#3-postgresql-high-availability-with-cloudnativepg-operator)
+ 
 ## Features
 
 * **CRUD Operations:** Full C.R.U.D. (Create, Read, Update, Delete) functionality for managing books and authors.
