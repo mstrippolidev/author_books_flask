@@ -700,7 +700,7 @@ This command lists all pods managed by the Patroni (Spilo) PostgreSQL cluster, s
 
 #### Connecting the Flask Application to the Zalando PostgreSQL Cluster
 
-To connect the Flask application to this highly available PostgreSQL cluster, I need to update your database connection string in the `.env` file used by the flask application. (I conect throug secrets). 
+To connect the Flask application to this highly available PostgreSQL cluster, I have to update the connection string in the `.env` file used by the flask application. (I connect through secrets). 
 
 1.  **Create the Secrets:** Ensure your Kubernetes secret `secrets-flask-app` exists, populated from your local `.env` file. If you haven't already, or if you've updated your `.env` file, run:
 
