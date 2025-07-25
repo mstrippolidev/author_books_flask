@@ -28,7 +28,7 @@ This repository hosts a robust Flask API for managing books and authors, featuri
         -   [Connecting the Flask Application to the Zalando PostgreSQL Cluster](#connecting-the-flask-application-to-the-zalando-postgresql-cluster)
         -   [Benefits of Using Zalando PostgreSQL Operator](#benefits-of-using-zalando-postgresql-operator)
         -   [Further Improvements to the Zalando Operator Manifest](#further-improvements-to-the-zalando-operator-manifest)
-     -   [3. PostgreSQL High Availability with CloudNativePG Operator](#3-postgresql-high-availability-with-cloudnativepg-operator)
+    -   [3. PostgreSQL High Availability with CloudNativePG Operator](#3-postgresql-high-availability-with-cloudnativepg-operator)
         -   [Installation of CloudNativePG Operator](#installation-of-cloudnativepg-operator)
         -   [Deploying the CloudNativePG Cluster](#deploying-the-cloudnativepg-cluster)
         -   [Connecting the Flask Application to CloudNativePG](#connecting-the-flask-application-to-cloudnativepg)
