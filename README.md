@@ -405,7 +405,7 @@ The application is deployed on an **Amazon EKS (Elastic Kubernetes Service)** cl
 To ensure optimal resource allocation and security, the EKS cluster utilizes two distinct node groups:
 
 * **`role=app` Node Group:** Nodes in this group are dedicated to running the Flask application pods. These nodes are deployed in private subnets across AZ B and C. This allows the application pods to remain isolated from direct internet access, enhancing security. Traffic to the application is exposed via a public AWS Load Balancer (configured separately, typically via an Ingress Controller not shown in these basic manifests).
-* **`role=db` Node Group:** Nodes in this group are reserved for database-related pods (like PostgreSQL). This specific node group is isolated in a private subnet within AZ A. This separation ensures that sensitive database workloads run on dedicated infrastructure, minimizing interference and potentially allowing for different instance types or security configurations.
+* **`role=db` Node Group:** Nodes in this group are reserved for database-related pods (like PostgreSQL). This specific node group is isolated in a private subnet within AZ A and B. This separation ensures that sensitive database workloads run on dedicated infrastructure, minimizing interference and potentially allowing for different instance types or security configurations.
 
 This architecture offers flexibility. While the current setup uses private subnets for application and database nodes, users can adapt the configuration to their needs, such as:
 * Deploying entirely within public subnets for simpler setups.
