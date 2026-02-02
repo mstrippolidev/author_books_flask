@@ -2,6 +2,9 @@
 
 This repository showcases a **robust Flask API** for comprehensive book and author management, engineered with a strong emphasis on **advanced security** and **flexible, high-availability Kubernetes deployment strategies**. It features secure user authentication via **JWT and OAuth2 (Google)**, **rate limiting**, **Role-Based Access Control (RBAC)**, and demonstrates sophisticated deployments on **AWS EKS** using both a simple PostgreSQL setup, and highly available clusters managed by **Zalando PostgreSQL Operator** and **CloudNativePG Operator**.
 
+<img width="1000" height="600" alt="Code_Generated_Image (1)" src="https://github.com/user-attachments/assets/3bdb488d-27dd-4963-a76e-d2f602b2903e" />
+
+
 ## Table of Contents
 
 -   [Features](#features)
@@ -33,7 +36,8 @@ This repository showcases a **robust Flask API** for comprehensive book and auth
         -   [Deploying the CloudNativePG Cluster](#deploying-the-cloudnativepg-cluster)
         -   [Connecting the Flask Application to CloudNativePG](#connecting-the-flask-application-to-cloudnativepg)
         -   [Benefits of Using CloudNativePG Operator](#benefits-of-using-cloudnativepg-operator)
-        -   [Further Improvements to the CloudNativePG Manifest](#further-improvements-to-the-cloudnativepg-manifest)
+        -   [Further Improvements to the CloudNativePG Manifest](#further-improvements-to-the-cloudnativepg-manifest)]
+    -  [4. Comparison Zalando vs. CloudNativePG] (#4-comparison-zalando-vs-cloudnativepg)
  
 ## Features
 
@@ -981,3 +985,14 @@ While the provided manifest is a solid starting point for a highly available dat
         #   - CREATE EXTENSION IF NOT EXISTS postgis;
     ```
 * **WAL Disk Space Safeguard:** CloudNativePG includes features to prevent WAL disk space exhaustion, ensuring the cluster safely stops rather than entering an unrecoverable state, which is a good practice to be aware of.
+
+4. 📊 Comparison: Zalando vs. CloudNativePG
+
+A key part of this project was evaluating different methods for achieving High Availability (HA) for PostgreSQL on Kubernetes. Below is a summary of the two operators explored:
+
+| Feature | Zalando Postgres Operator (Spilo) | CloudNativePG (CNPG) |
+| :--- | :--- | :--- |
+| **HA Mechanism** | Uses an external tool (**Patroni**) for leader election and failover coordination. | Uses the **native Kubernetes API** directly for leader election and state management. |
+| **Configuration Style** | Often relies on ConfigMaps, environment variables, and sidecar containers. | More **declarative**, using Custom Resource Definitions (CRDs) as the primary source of truth. |
+| **Backup & Restore** | Typically integrates with external tools like **WAL-E** or **WAL-G**. | Has built-in support for backup/recovery (e.g., to S3) via **Barman**. |
+| **Ideal Use Case** | Well-suited for large-scale, complex legacy migrations or teams already familiar with Patroni. | Ideal for **modern, cloud-native** deployments where deep Kubernetes integration is preferred. |
