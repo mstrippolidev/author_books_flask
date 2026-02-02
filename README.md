@@ -986,7 +986,7 @@ While the provided manifest is a solid starting point for a highly available dat
     ```
 * **WAL Disk Space Safeguard:** CloudNativePG includes features to prevent WAL disk space exhaustion, ensuring the cluster safely stops rather than entering an unrecoverable state, which is a good practice to be aware of.
 
-4. 📊 Comparison: Zalando vs. CloudNativePG
+4. 📊 Comparison Zalando vs. CloudNativePG
 
 A key part of this project was evaluating different methods for achieving High Availability (HA) for PostgreSQL on Kubernetes. Below is a summary of the two operators explored:
 
