@@ -37,7 +37,7 @@ This repository showcases a **robust Flask API** for comprehensive book and auth
         -   [Connecting the Flask Application to CloudNativePG](#connecting-the-flask-application-to-cloudnativepg)
         -   [Benefits of Using CloudNativePG Operator](#benefits-of-using-cloudnativepg-operator)
         -   [Further Improvements to the CloudNativePG Manifest](#further-improvements-to-the-cloudnativepg-manifest)]
-    -  [4. Comparison Zalando vs. CloudNativePG] (#4-comparison-zalando-vs-cloudnativepg)
+    -  [4. Comparison Zalando vs. CloudNativePG](#4-comparison-zalando-vs-cloudnativepg)
  
 ## Features
 
